@@ -1,0 +1,56 @@
+{
+  "poll_minutes": 10,
+  "max_popups_per_cycle": 5,
+  "feeds": [
+    {
+      "name": "BBC World",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "weight": 6
+    },
+    {
+      "name": "Google News - Alliance Indicators",
+      "url": "https://news.google.com/rss/search?q=%28%22mutual+defense%22+OR+%22military+alliance%22+OR+%22integrated+command%22+OR+%22joint+logistics%22%29+%28China+OR+Russia+OR+Taiwan+OR+NATO+OR+Iran+OR+%22North+Korea%22+OR+BRICS%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3
+    },
+    {
+      "name": "Google News - China Russia Security",
+      "url": "https://news.google.com/rss/search?q=%28China+OR+Chinese%29+%28Russia+OR+Russian%29+%28defense+OR+military+OR+command+OR+logistics%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3
+    },
+    {
+      "name": "Google News - Taiwan NATO Korea Iran",
+      "url": "https://news.google.com/rss/search?q=%28Taiwan+OR+NATO+OR+%22North+Korea%22+OR+Iran%29+%28alliance+OR+%22mutual+defense%22+OR+%22joint+command%22+OR+%22base+access%22%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3
+    },
+    {
+      "name": "Taipei Times",
+      "url": "https://www.taipeitimes.com/xml/index.rss",
+      "weight": 7
+    },
+    {
+      "name": "US Defense Department",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50",
+      "weight": 9
+    },
+    {
+      "name": "USNI News",
+      "url": "https://news.usni.org/feed",
+      "weight": 7
+    },
+    {
+      "name": "Defense News",
+      "url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
+      "weight": 7
+    },
+    {
+      "name": "The Diplomat - Asia Pacific",
+      "url": "https://thediplomat.com/feed/",
+      "weight": 6
+    },
+    {
+      "name": "CISA Cyber Advisories",
+      "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+      "weight": 9
+    }
+  ]
+}

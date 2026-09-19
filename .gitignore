@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+alliance_watch.db-wal
+alliance_watch.db-shm
+bin/
+obj/
+*.user
+assessment-ui-smoke.db*
+assessment-benchmark.db*
+
+# Local data and credentials never belong in the source repository.
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.log
+*.log.*
+.env
+.env.*
+.venv/
+
+# Generated diagnostics and local UI captures.
+assessment-*-results.txt
+assessment-benchmark*.txt
+assessment-scoring-fingerprint*.txt
+alert-center-fixed.png
+alliancewatch-*.png
+icons-crop*.png
