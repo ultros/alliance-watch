@@ -1,5 +1,7 @@
 # AllianceWatch Strategic Assessment Console
 
+Alliance Watch monitors official defense, security, cyber, and global news sources for alliance shifts, force-posture changes, joint exercises, basing access, command integration, logistics, and other geopolitical escalation indicators.
+
 AllianceWatch is now a native C# Windows desktop application with a borderless,
 full-screen strategic monitoring interface. Version 3 adds a deterministic escalation
 assessment engine with separate risk, confidence and momentum, 30 configurable protocols,
