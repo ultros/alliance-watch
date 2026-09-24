@@ -15,6 +15,15 @@ inspect its underlying record. The record panel includes original timestamps, UR
 publisher/origin, source class, canonical hashes, parser version, actors, scenario
 membership, protocol IDs, source family, correction candidates and score components.
 
+**OPERATIONS WORKSPACE** adds eight focused views without expanding the primary
+dashboard: feed/theatre coverage, since-last-scan changes, claim comparison,
+personal watchlists, analyst review, data-quality checks, what-if replay, and
+backup/restore-copy verification. The footer displays the count of enabled feeds
+with a recent successful fetch; this is collection freshness, not total coverage.
+Coverage counts original-reporting origins distinctly and surfaces gaps explicitly.
+The first scan comparison against older pre-migration history uses the previous
+assessment and labels that fallback, rather than pretending a scan marker exists.
+
 Risk display bands are LOW 0–19, GUARDED 20–39, ELEVATED 40–59, HIGH 60–79 and
 EXTREME 80–100. Risk and confidence are independent channels. Missing history is
 reported explicitly; zero confidence does not establish safety.
@@ -69,6 +78,7 @@ Existing `config.json` remains valid. Optional top-level fields:
 ```json
 {
   "archive_enabled": false,
+  "archive_concurrency": 6,
   "assessment": {
     "Version": "AW-1.0",
     "NormalizationScale": 60,
@@ -80,6 +90,11 @@ Existing `config.json` remains valid. Optional top-level fields:
 ```
 
 Merge these fields into the existing object; retain its `feeds` and polling options.
+Archiving runs continuously between scans with `archive_concurrency` parallel
+article downloads (default 6, allowed 1–12). Empty queues are checked every five
+seconds. Page timeouts use the existing retry backoff; individual images have a
+15-second deadline within a 60-second article budget, and failed images do not
+discard an already downloaded page. Shutdown cancels and joins the archive worker.
 The `assessment` object also accepts `Protocols`, `Scenarios`, `ActorAliases` and
 `NarrativeTerms`. The complete default definitions are visible in IMPORT / SETTINGS
 and live in `ProtocolCatalog.cs` / `AssessmentEngine.cs`. Replacing `Protocols`
@@ -163,6 +178,16 @@ capacity is exceeded; it reports an error and preserves the archive. Historical 
 beyond the console window remain stored. Very large archives need a further streaming
 assessment/query implementation. These capacity bounds are not claims of indefinite
 unlimited operation.
+
+Operator watchlists are separate preferences. They trigger an alert only for a new
+or strengthened current scored event that meets the selected evidence-confidence
+floor, and deduplicate on watch item, event family, corroboration count and score
+bucket. Review decisions are a separate append-only audit log; a false-positive
+review does not retroactively edit evidence or scoring. What-if runs recompute a
+same-time baseline and variant from contemporaneously available stored extraction
+results; they do not re-extract changed detection patterns or modify live rows.
+SQLite backups are created to a new file, integrity-checked, and may be copied to a
+second verified restore-test file. No in-place restore of a running database occurs.
 
 The benchmark exercises extraction/scoring, 10,000 hash lookups, 100 simulated feed
 requests with 1,000 new articles, normalization/deduplication, a 100,000-article SQLite

@@ -13,7 +13,12 @@ internal sealed partial class FeedMonitor : IDisposable
     private readonly string _logPath;
     private readonly HttpClient _client;
     private readonly object _logLock = new();
+    private readonly object _archiveLock = new();
+    private readonly CancellationTokenSource _archiveShutdown = new();
     private Task _archiveWork = Task.CompletedTask;
+    private bool _disposed;
+    private long _archiveRevision;
+    internal long ArchiveRevision => Interlocked.Read(ref _archiveRevision);
     private const int MaxImagesPerArticle = 24;
     private const int MaxImageBytes = 20 * 1024 * 1024;
 
@@ -36,6 +41,8 @@ internal sealed partial class FeedMonitor : IDisposable
 
     public async Task<ScanResult> ScanAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        StartArchiveWorker(cancellationToken);
         var health = _storage.FeedHealthRecords().ToDictionary(h => h.Url);
         var results = new System.Collections.Concurrent.ConcurrentBag<(FeedConfig Feed, FeedEntry[] Entries, FeedHealth Health)>();
         await Parallel.ForEachAsync(_config.Feeds.Where(f => f.Enabled),
@@ -105,8 +112,11 @@ internal sealed partial class FeedMonitor : IDisposable
                     var detected = engine.Extract(new(hash, title, summary, url, item.Feed.Name, DateTimeOffset.TryParse(published, out var at) ? at : now, now, item.Feed.SourceQuality, item.Feed.Origin));
                     if (detected.Protocols.Length == 0) continue;
                     signals++;
-                    var result = new MatchResult { ArticleHash = hash, FeedName = item.Feed.Name, Title = title, Url = url, Published = published, Severity = "LOG ONLY", Score = (int)Math.Round(detected.Severity), Phrases = detected.Protocols.Select(id => _config.Assessment.Protocols.First(p => p.Id == id).Name).ToList(), Actors = detected.Actors.ToList(), SourceWeight = item.Feed.Weight };
-                    result.MatchId = _storage.InsertMatch(result); logOnly.Add(result);
+                    var score = (int)Math.Round(detected.Severity);
+                    var severity = IndicatorEngine.ClassifySeverity(score);
+                    var result = new MatchResult { ArticleHash = hash, FeedName = item.Feed.Name, Title = title, Url = url, Published = published, Severity = severity, Score = score, Phrases = detected.Protocols.Select(id => _config.Assessment.Protocols.First(p => p.Id == id).Name).ToList(), Actors = detected.Actors.ToList(), SourceWeight = item.Feed.Weight };
+                    result.MatchId = _storage.InsertMatch(result);
+                    if (severity == "LOG ONLY") logOnly.Add(result); else alerts.Add(result);
                 }
                 catch (Exception ex) when (!cancellationToken.IsCancellationRequested) { Log("ERROR", $"feed={item.Feed.Name} entry failed: {ex.Message}"); }
             }
@@ -114,17 +124,50 @@ internal sealed partial class FeedMonitor : IDisposable
             _storage.SaveFeedHealth(updated);
             states.Add(new(item.Feed.Name, updated.Items, updated.Failures == 0, updated.Error.Length > 0 ? updated.Error : $"HTTP {updated.Status} // NEXT {updated.NextFetch:HH:mm}"));
         }
-        // Archive remains available, bounded independently of assessment work.
-        var archiveQueue = _config.ArchiveEnabled ? _storage.PendingArchives(12) : [];
-        if (archiveQueue.Count > 0 && _archiveWork.IsCompleted) _archiveWork = ArchiveInBackgroundAsync(archiveQueue, cancellationToken);
         return new ScanResult(alerts, logOnly, states, newArticles);
     }
-    private async Task ArchiveInBackgroundAsync(IReadOnlyCollection<PendingArticle> articles,CancellationToken token)
+
+    private void StartArchiveWorker(CancellationToken token)
     {
-        try{await ArchiveArticlesAsync(articles,null,token);}
-        catch(OperationCanceledException) when(token.IsCancellationRequested) { }
-        catch(Exception ex){Log("ERROR","Archive worker: "+ex.Message);}
+        lock (_archiveLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_config.ArchiveEnabled || !_archiveWork.IsCompleted) return;
+            _archiveWork = Task.Run(() => ArchiveInBackgroundAsync(token));
+        }
     }
+
+    private async Task ArchiveInBackgroundAsync(CancellationToken scanToken)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(scanToken, _archiveShutdown.Token);
+        var token = lifetime.Token;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    // Keep draining ready work between feed scans. Retry dates are
+                    // enforced by storage, so inaccessible sites cannot spin here.
+                    var articles = _storage.PendingArchives(Math.Clamp(_config.ArchiveConcurrency, 1, 12) * 4);
+                    if (articles.Count > 0)
+                    {
+                        await ArchiveArticlesAsync(articles, null, token);
+                        continue;
+                    }
+                }
+                catch (Exception ex) when (!token.IsCancellationRequested)
+                {
+                    Log("ERROR", "Archive worker: " + ex.Message);
+                }
+                // Notice new feed entries and due retries without waiting for the
+                // next collection cycle, while avoiding an idle database busy loop.
+                await Task.Delay(TimeSpan.FromSeconds(5), token);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+    }
+
     private async Task ArchiveArticlesAsync(
         IReadOnlyCollection<PendingArticle> articles,
         IProgress<string>? progress,
@@ -132,18 +175,24 @@ internal sealed partial class FeedMonitor : IDisposable
     {
         var completed = 0;
         await Parallel.ForEachAsync(articles,
-            new ParallelOptions { MaxDegreeOfParallelism = 1, CancellationToken = cancellationToken },
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(_config.ArchiveConcurrency, 1, 12), CancellationToken = cancellationToken },
             async (article, token) =>
             {
                 try
                 {
                     var archive = await FetchArticleArchiveAsync(article, token);
+                    token.ThrowIfCancellationRequested();
                     _storage.SaveArticleArchive(archive);
+                    Interlocked.Increment(ref _archiveRevision);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!token.IsCancellationRequested)
                 {
-                    _storage.MarkArchiveFailure(article.ArticleHash, article.Url, ex.Message);
-                    Log("WARNING", $"archive failed title={article.Title} url={article.Url}: {ex.Message}");
+                    // HttpClient and article deadlines also throw cancellation:
+                    // only application cancellation should stop the worker.
+                    var error = ex is OperationCanceledException ? "Article download timed out." : ex.Message;
+                    _storage.MarkArchiveFailure(article.ArticleHash, article.Url, error);
+                    Interlocked.Increment(ref _archiveRevision);
+                    Log("WARNING", $"archive failed title={article.Title} url={article.Url}: {error}");
                 }
                 finally
                 {
@@ -155,6 +204,7 @@ internal sealed partial class FeedMonitor : IDisposable
 
     private async Task<ArticleArchive> FetchArticleArchiveAsync(PendingArticle article, CancellationToken cancellationToken)
     {
+        var lifetimeToken = cancellationToken;
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(60));
         cancellationToken=timeout.Token;
@@ -178,22 +228,29 @@ internal sealed partial class FeedMonitor : IDisposable
             using var imageGate = new SemaphoreSlim(4);
             var imageTasks = candidates.Select(async (candidate, position) =>
             {
-                await imageGate.WaitAsync(cancellationToken);
+                var entered = false;
                 try
                 {
-                    return await FetchArchivedImageAsync(candidate, position, cancellationToken);
+                    await imageGate.WaitAsync(cancellationToken);
+                    entered = true;
+                    using var imageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    imageTimeout.CancelAfter(TimeSpan.FromSeconds(15));
+                    return await FetchArchivedImageAsync(candidate, position, imageTimeout.Token);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!lifetimeToken.IsCancellationRequested)
                 {
+                    // Images are best-effort. Preserve the downloaded page and
+                    // other images even when one image or the image budget expires.
                     Log("DEBUG", $"image archive skipped url={candidate.ResolvedUrl}: {ex.Message}");
                     return null;
                 }
-                finally { imageGate.Release(); }
+                finally { if (entered) imageGate.Release(); }
             });
             var downloaded = await Task.WhenAll(imageTasks);
             images.AddRange(downloaded.Where(x => x is not null).Select(x => x!).OrderBy(x => x.Position));
         }
 
+        lifetimeToken.ThrowIfCancellationRequested();
         var textBytes = Encoding.UTF8.GetBytes(text);
         return new ArticleArchive(article.ArticleHash, finalUri.ToString(), contentType,
             body.Length, textBytes.Length, Gzip(body), Gzip(textBytes), images);
@@ -348,7 +405,25 @@ internal sealed partial class FeedMonitor : IDisposable
         }
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        Task work;
+        lock (_archiveLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _archiveShutdown.Cancel();
+            work = _archiveWork;
+        }
+        // The worker runs on the thread pool, so waiting here does not require
+        // the UI context and prevents writes after the monitor has been closed.
+        try { work.GetAwaiter().GetResult(); }
+        finally
+        {
+            _client.Dispose();
+            _archiveShutdown.Dispose();
+        }
+    }
 
 
     private sealed record ImageCandidate(string SourceUrl, Uri ResolvedUrl, string AltText);

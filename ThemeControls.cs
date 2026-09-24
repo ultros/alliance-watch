@@ -16,11 +16,13 @@ internal static class UiTheme
     public static readonly Color Red = Color.FromArgb(255, 70, 74);
     public static readonly Color Orange = Color.FromArgb(255, 164, 57);
     public static readonly Color Yellow = Color.FromArgb(242, 215, 75);
-    public static readonly Font Micro = new("Consolas", 7.5f, FontStyle.Bold);
-    public static readonly Font Small = new("Consolas", 8.5f, FontStyle.Regular);
-    public static readonly Font Label = new("Consolas", 9f, FontStyle.Bold);
-    public static readonly Font Heading = new("Consolas", 13f, FontStyle.Bold);
-    public static readonly Font Display = new("Consolas", 30f, FontStyle.Bold);
+    // The console is normally used on wall displays and high-resolution ultrawide monitors.
+    // These values remain compact at 1366px while being readable at normal viewing distance.
+    public static readonly Font Micro = new("Consolas", 8.5f, FontStyle.Bold);
+    public static readonly Font Small = new("Consolas", 9.5f, FontStyle.Regular);
+    public static readonly Font Label = new("Consolas", 10.5f, FontStyle.Bold);
+    public static readonly Font Heading = new("Consolas", 14f, FontStyle.Bold);
+    public static readonly Font Display = new("Consolas", 32f, FontStyle.Bold);
 
     public static Color Severity(string value) => value switch
     {
@@ -51,6 +53,29 @@ internal static class UiTheme
         button.FlatAppearance.MouseDownBackColor = Color.FromArgb(9, 43, 47);
         return button;
     }
+
+    public static void KeepSplitReadable(SplitContainer split, double firstFraction, int firstMinimum, int secondMinimum)
+    {
+        var adjusting = false;
+        void ResizePanels()
+        {
+            if (adjusting) return;
+            var extent = split.Orientation == Orientation.Vertical ? split.ClientSize.Width : split.ClientSize.Height;
+            var available = extent - split.SplitterWidth;
+            if (available < firstMinimum + secondMinimum) return;
+            adjusting = true;
+            try
+            {
+                var target = Math.Clamp((int)Math.Round(available * firstFraction), firstMinimum, available - secondMinimum);
+                if (split.SplitterDistance != target) split.SplitterDistance = target;
+                split.Panel1MinSize = firstMinimum;
+                split.Panel2MinSize = secondMinimum;
+            }
+            finally { adjusting = false; }
+        }
+        split.SizeChanged += (_, _) => ResizePanels();
+        split.HandleCreated += (_, _) => ResizePanels();
+    }
 }
 
 internal sealed class ThemeButton : Button
@@ -63,6 +88,34 @@ internal sealed class ThemeButton : Button
         e.Graphics.DrawRectangle(border,0,0,Math.Max(0,Width-1),Math.Max(0,Height-1));
         TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,UiTheme.Muted,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+    }
+}
+
+// FlowLayoutPanel does not grow its docked height when controls wrap. Keep
+// every row visible at the window's minimum width instead of silently clipping
+// the second or third row of filters and actions.
+internal sealed class WrappingToolbar : FlowLayoutPanel
+{
+    public int MinimumToolbarHeight { get; set; } = 40;
+
+    public WrappingToolbar()
+    {
+        Dock = DockStyle.Top;
+        WrapContents = true;
+        Padding = new Padding(4);
+    }
+
+    protected override void OnLayout(LayoutEventArgs eventArgs)
+    {
+        base.OnLayout(eventArgs);
+        if (ClientSize.Width <= 0) return;
+        // Control.Visible is false for every child while an owning form or tab
+        // has not been shown yet; still size the bar for its laid-out children.
+        var bottom = Controls.Cast<Control>().Where(control => !Visible || control.Visible)
+            .Select(control => control.Bottom + control.Margin.Bottom)
+            .DefaultIfEmpty(0).Max();
+        var height = Math.Max(MinimumToolbarHeight, bottom + Padding.Bottom);
+        if (Height != height) Height = height;
     }
 }
 

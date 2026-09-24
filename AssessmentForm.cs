@@ -9,17 +9,28 @@ internal sealed class AssessmentForm : Form
     private readonly Storage _storage;
     private readonly AppConfig _config;
     private readonly string? _sourceUrl;
+    private readonly string? _eventId;
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Multiline = true, DrawMode = TabDrawMode.OwnerDrawFixed, Padding = new Point(10,6) };
     private readonly Label _status = new() { Dock = DockStyle.Top, Height = 64, ForeColor = UiTheme.Cyan, Padding = new Padding(8), Text = "LOADING ASSESSMENT…" };
     private EvidenceEvent[] _evidence = [];
     private Assessment[] _history = [];
     private Assessment? _current;
-    private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 250 };
-    private readonly System.Windows.Forms.Timer _playback = new() { Interval = 1000 };
+    private HashSet<string> _ignoredIds = new(StringComparer.Ordinal);
+    private System.Windows.Forms.Timer _debounce = new() { Interval = 250 };
+    private System.Windows.Forms.Timer _playback = new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 15000 };
     private readonly List<DataGridView> _grids = [];
-    public AssessmentForm(Storage storage, AppConfig config, string? sourceUrl = null)
+    private DataGridView? _changesGrid;
+    private ComboBox? _changeRange;
+    private Label? _changesSummary;
+    private bool _loading;
+    private bool _checkingLatest;
+    private bool _shownSource;
+    private int _changesVersion;
+    public event Action<Assessment>? AssessmentUpdated;
+    public AssessmentForm(Storage storage, AppConfig config, string? sourceUrl = null, string? eventId = null)
     {
-        _storage = storage; _config = config; _sourceUrl = sourceUrl;
+        _storage = storage; _config = config; _sourceUrl = sourceUrl; _eventId = eventId;
         Text = "AllianceWatch // Escalation Assessment Console"; Size = new(1280,820); MinimumSize = new(900,600);
         BackColor = UiTheme.Void; ForeColor = UiTheme.Text; Font = UiTheme.Small; StartPosition = FormStartPosition.CenterParent;
         Controls.Add(_tabs); Controls.Add(_status);
@@ -29,30 +40,68 @@ internal sealed class AssessmentForm : Form
             using var brush=new SolidBrush(selected?UiTheme.Raised:UiTheme.Void);e.Graphics.FillRectangle(brush,e.Bounds);
             TextRenderer.DrawText(e.Graphics,_tabs.TabPages[e.Index].Text,Font,e.Bounds,selected?UiTheme.CyanHot:UiTheme.Cyan,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
         };
-        Shown += async (_, _) => await LoadAsync();
+        UiToolTips.Enable(this);
+        Shown += async (_, _) => { await LoadAsync(); _refreshTimer.Start(); };
+        _tabs.SelectedIndexChanged += async (_, _) => { if (!_loading && _tabs.SelectedTab?.Text == "WHY SCORE MOVED") await CheckForNewAssessmentAsync(); };
+        _refreshTimer.Tick += async (_, _) => { if (_tabs.SelectedTab?.Text == "WHY SCORE MOVED") await CheckForNewAssessmentAsync(); };
     }
     internal async Task LoadAsync()
     {
+        if (_loading) return;
+        _loading = true;
         try
         {
-            var data = await Task.Run(() => (_storage.LoadEvidence(), _storage.ScoreHistory(), _storage.FeedHealthRecords(), _storage.AssessmentAlerts(), _storage.AssessmentHistory(1).FirstOrDefault()));
+            var data = await Task.Run(() => (_storage.LoadEvidence(), _storage.ScoreHistory(), _storage.FeedHealthRecords(), _storage.AssessmentAlerts(), _storage.AssessmentHistory(1).FirstOrDefault(), _storage.IgnoredRecordIds()));
             if (IsDisposed) return;
-            (_evidence, _history) = (data.Item1, data.Item2); _current = data.Item5;
+            var selectedTab = _tabs.SelectedTab?.Text;
+            var selectedRange = _changeRange?.Text;
+            ResetTabs();
+            (_evidence, _history) = (data.Item1, data.Item2); _current = data.Item5; _ignoredIds = data.Item6;
             _status.Text = _current == null ? "NO ASSESSMENT // Run an active scan" : $"ESCALATION {_current.Risk:F1}/100   CONFIDENCE {_current.Confidence:F0}/100   {_current.Momentum}   {_current.Timestamp:u}\r\nInternal observable-indicator index. Not a probability or forecast. Confidence describes evidence support; coverage may be incomplete.";
             if (_current == null) return;
-            BuildVector(); BuildChanges(); BuildRecords(); BuildScenarios(); BuildTimeline(); BuildNarrative(); BuildGraph(); BuildHotspots();
+            BuildVector(); BuildChanges(selectedRange); BuildRecords(); BuildScenarios(); BuildTimeline(); BuildNarrative(); BuildGraph(); BuildHotspots();
             AddGrid("FEED HEALTH", data.Item3.Select(h => new { h.Name, h.Status, h.LastSuccess, h.NextFetch, h.LatencyMs, h.Failures, h.Items, h.Duplicates, Unique = h.Items - h.Duplicates, h.Signals, h.ETag, h.LastModified, h.Error }).ToArray());
             BuildBacktest(); BuildAudit(); BuildAlerts(data.Item4); BuildProtocols(); BuildExports();
             AddGrid("HISTORICAL BASELINE",AssessmentAnalytics.Baselines(_history,_current.Timestamp));
             AddGrid("RATE OF CHANGE",AssessmentAnalytics.Rates(_current,_history));
             BuildImport();
-            if (_sourceUrl != null)
+            if (selectedTab != null && _tabs.TabPages.Cast<TabPage>().FirstOrDefault(p => p.Text == selectedTab) is { } restore) _tabs.SelectedTab = restore;
+            RefreshChanges();
+            if (_eventId != null && !_shownSource)
             {
+                _shownSource = true;
+                ShowCluster(_eventId);
+            }
+            else if (_sourceUrl != null && !_shownSource)
+            {
+                _shownSource = true;
                 var e = _evidence.FirstOrDefault(e => e.Source.Url == _sourceUrl);
                 if (e != null) ShowRecord(e); else _status.Text += "\r\nRecord normalization pending; scan to include this record.";
             }
         }
         catch (Exception ex) { if (!IsDisposed) _status.Text = "ASSESSMENT LOAD FAILED // " + ex.Message; }
+        finally { _loading = false; }
+    }
+    private void ResetTabs()
+    {
+        ++_changesVersion;
+        _debounce.Dispose(); _playback.Dispose();
+        _debounce = new() { Interval = 250 }; _playback = new() { Interval = 1000 };
+        foreach (var page in _tabs.TabPages.Cast<TabPage>().ToArray()) page.Dispose();
+        _tabs.TabPages.Clear(); _grids.Clear();
+        _changesGrid = null; _changeRange = null; _changesSummary = null;
+    }
+    private async Task CheckForNewAssessmentAsync()
+    {
+        if (_checkingLatest || _loading || IsDisposed) return;
+        _checkingLatest = true;
+        try
+        {
+            var latest = await Task.Run(_storage.LatestAssessmentTimestamp);
+            if (!IsDisposed && latest != null && latest != _current?.Timestamp) await LoadAsync();
+        }
+        catch (Exception ex) { if (!IsDisposed) _status.Text = "ASSESSMENT REFRESH FAILED // " + ex.Message; }
+        finally { _checkingLatest = false; }
     }
     private TabPage Page(string title)
     {
@@ -62,7 +111,9 @@ internal sealed class AssessmentForm : Form
     private static TextBox Readout(string text) => new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, BackColor = UiTheme.Surface, ForeColor = UiTheme.Cyan, Font = UiTheme.Small, BorderStyle = BorderStyle.None, Text = text };
     private DataGridView Grid()
     {
-        var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AutoGenerateColumns = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, BackgroundColor = UiTheme.Surface, BorderStyle = BorderStyle.None, RowHeadersVisible = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, EnableHeadersVisualStyles = false };
+        // Content-based width measurement walks many cells whenever a large tab binds.
+        // Fixed initial widths keep the analytical console responsive; columns remain user-resizable.
+        var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AutoGenerateColumns = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None, BackgroundColor = UiTheme.Surface, BorderStyle = BorderStyle.None, RowHeadersVisible = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, EnableHeadersVisualStyles = false };
         grid.DefaultCellStyle = new() { BackColor = UiTheme.Surface, ForeColor = UiTheme.Text, SelectionBackColor = UiTheme.Raised, SelectionForeColor = UiTheme.CyanHot, Font = UiTheme.Small };
         grid.ColumnHeadersDefaultCellStyle = new() { BackColor = UiTheme.Void, ForeColor = UiTheme.Cyan, Font = UiTheme.Small };
         _grids.Add(grid); return grid;
@@ -83,30 +134,78 @@ internal sealed class AssessmentForm : Form
         Page("ESCALATION VECTOR").Controls.Add(Readout(text.ToString()));
     }
     private static readonly string[] Ladder = ["NORMAL COMPETITION", "DIPLOMATIC FRICTION", "COERCIVE SIGNALING", "FORCE POSITIONING", "LIMITED MOBILIZATION", "THEATER PREPARATION", "DIRECT MILITARY CONTACT", "REGIONAL INTERSTATE WAR", "ALLIANCE ACTIVATION", "MULTI-THEATER GREAT-POWER CONFLICT", "SYSTEMIC WAR"];
-    private void BuildChanges()
+    internal static DateTimeOffset? ChangeBaseline(Assessment current, IReadOnlyList<Assessment> history, string range)
+    {
+        var prior = history.Where(a => a.Timestamp < current.Timestamp).ToArray();
+        if (range == "LAST GAUGE MOVE")
+            return prior.FirstOrDefault(a => Math.Round(a.Risk) != Math.Round(current.Risk))?.Timestamp ?? prior.FirstOrDefault()?.Timestamp;
+        if (range == "PREVIOUS SNAPSHOT") return prior.FirstOrDefault()?.Timestamp;
+        var hours = range switch { "1 HOUR" => 1, "6 HOURS" => 6, "24 HOURS" => 24, "7 DAYS" => 168, _ => 0 };
+        return hours == 0 ? null : prior.FirstOrDefault(a => a.Timestamp <= current.Timestamp.AddHours(-hours))?.Timestamp;
+    }
+    private void BuildChanges(string? selectedRange)
     {
         // Hidden tab pages may defer binding and auto-generated columns until selected.
         // Define this grid's schema before assigning its data or configuring columns.
-        var g = Grid();
+        var g = Grid(); _changesGrid = g;
         g.AutoGenerateColumns=false;
         g.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.None;
         foreach(var name in new[]{"Delta","Reason","Before","After","EventId"})
         {
-            var column=new DataGridViewTextBoxColumn{Name=name,HeaderText=name,DataPropertyName=name,Width=name=="EventId"?160:90};
+            var column=new DataGridViewTextBoxColumn{Name=name,HeaderText=name=="Delta"?"RAW Δ":name,DataPropertyName=name,Width=name=="EventId"?160:100};
             if(name=="Reason"){column.AutoSizeMode=DataGridViewAutoSizeColumnMode.Fill;column.MinimumWidth=240;}
-            if(name is "Before" or "After" or "Delta")column.DefaultCellStyle.Format="0.000";
+            if(name is "Before" or "After" or "Delta")column.DefaultCellStyle.Format="0.00000000";
             g.Columns.Add(column);
         }
-        g.DataSource=_current!.Changes.OrderByDescending(c=>Math.Abs(c.Delta)).ToArray();
-        Page("WHY SCORE MOVED").Controls.Add(g);
-        g.CellDoubleClick += (_,e) => { if(e.RowIndex >= 0) ShowCluster(Convert.ToString(g.Rows[e.RowIndex].Cells["EventId"].Value)!); };
-        var label = new Label { Dock = DockStyle.Top, Height = 42, Text = $"NET {_current.Delta:+0.000;-0.000;0.000} INDEX POINTS // event rows are raw points; normalization row reconciles the total.\r\nDouble-click an event to inspect its source records.", ForeColor = UiTheme.Cyan };
-        g.Parent!.Controls.Add(label);
+        var page=Page("WHY SCORE MOVED"); page.Controls.Add(g);
+        g.CellDoubleClick += (_,e) => { if(e.RowIndex >= 0) { var id=Convert.ToString(g.Rows[e.RowIndex].Cells["EventId"].Value); if(id is not ("convergence" or "normalization") && id != null) ShowCluster(id); } };
+        var label = new Label { Dock = DockStyle.Top, Height = 62, Text = "LOADING SCORE COMPARISON…", ForeColor = UiTheme.Cyan }; _changesSummary=label; page.Controls.Add(label);
+        var bar=new FlowLayoutPanel { Dock=DockStyle.Top, Height=40, WrapContents=false };
+        var range=new ComboBox { Width=200, DropDownStyle=ComboBoxStyle.DropDownList }; _changeRange=range;
+        range.Items.AddRange(["LAST GAUGE MOVE","PREVIOUS SNAPSHOT","1 HOUR","6 HOURS","24 HOURS","7 DAYS"]);
+        range.SelectedItem=range.Items.Cast<string>().FirstOrDefault(x=>x==selectedRange)??"LAST GAUGE MOVE";
+        range.SelectedIndexChanged+=(_,_)=>RefreshChanges();
+        var refresh=UiTheme.Button("REFRESH SCORE"); refresh.Click+=async (_,_)=>await LoadAsync();
+        bar.Controls.Add(range);bar.Controls.Add(refresh);page.Controls.Add(bar);
+    }
+    private void RefreshChanges()
+    {
+        if (_current == null || _changeRange == null || _changesGrid == null || _changesSummary == null) return;
+        var version=++_changesVersion;
+        var current=_current;
+        var range=_changeRange.Text;
+        var baselineAt=ChangeBaseline(current,_history,range);
+        if (baselineAt == null)
+        {
+            _changesGrid.DataSource=Array.Empty<ScoreChange>();
+            _changesSummary.Text=$"LATEST {current.Timestamp:u} // INDEX {current.Risk:F6}/100\r\nNo earlier assessment is available for {range.ToLowerInvariant()}. Select a shorter comparison window.";
+            return;
+        }
+        try
+        {
+            // One local row (~70 KiB in a large archive) is cheaper than
+            // an extra async UI hand-off and cannot leave a half-bound tab.
+            var baseline=_storage.AssessmentAt(baselineAt.Value);
+            if (IsDisposed || version!=_changesVersion || _changesGrid.IsDisposed) return;
+            if (baseline == null)
+            {
+                _changesGrid.DataSource=Array.Empty<ScoreChange>();
+                _changesSummary.Text="Comparison snapshot is unavailable. Choose another interval.";
+                return;
+            }
+            var changes=AssessmentEngine.ExplainChanges(current,baseline);
+            _changesGrid.DataSource=changes.OrderBy(c=>c.EventId is "convergence" or "normalization" ? 1 : 0)
+                .ThenByDescending(c=>Math.Abs(c.Delta)).ToArray();
+            var net=current.Risk-baseline.Risk;
+            var fallback=range=="LAST GAUGE MOVE" && Math.Round(current.Risk)==Math.Round(baseline.Risk) ? " // NO DIFFERENT GAUGE READING IN HISTORY" : "";
+            _changesSummary.Text=$"{range}: {baseline.Risk:F6} → {current.Risk:F6} / 100   NET {net:+0.000000;-0.000000;0.000000} INDEX POINTS{fallback}\r\n{baseline.Timestamp:u} → {current.Timestamp:u} // Rows show raw points; convergence and normalization reconcile to the index. Double-click an event for sources.";
+        }
+        catch(Exception ex) { if(!IsDisposed && version==_changesVersion) _changesSummary.Text="COMPARISON FAILED // "+ex.Message; }
     }
     private void BuildRecords()
     {
         var page = Page("EVIDENCE SEARCH"); var grid = Grid(); page.Controls.Add(grid);
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 72, WrapContents = true };
+        var bar = new WrappingToolbar { MinimumToolbarHeight = 72 };
         var search = new TextBox { Width = 260, PlaceholderText = "Headline, source, actor, ID, protocol…" };
         var scenario = new ComboBox { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList }; scenario.Items.Add("ALL SCENARIOS"); scenario.Items.AddRange(_config.Assessment.Scenarios.Select(s => (object)s.Id).ToArray()); scenario.Items.Add("unassigned"); scenario.SelectedIndex = 0;
         var sourceClass = new ComboBox { Width = 100, DropDownStyle = ComboBoxStyle.DropDownList }; sourceClass.Items.AddRange(["ALL CLASSES", "A", "B", "C", "D"]); sourceClass.SelectedIndex = 0;
@@ -124,7 +223,7 @@ internal sealed class AssessmentForm : Form
                 (components.GetValueOrDefault(e.ClusterId)?.Confidence ?? 0) >= (double)minConfidence.Value && e.Severity >= (double)minSeverity.Value &&
                 ($"{e.Source.Title} {e.Source.Publisher} {e.Source.RecordId} {string.Join(' ', e.Actors)} {string.Join(' ',e.Geography)} {string.Join(' ',e.Scenarios)} {string.Join(' ',e.Protocols.Select(p => _config.Assessment.Protocols.First(x => x.Id == p).Name))}".Contains(search.Text, StringComparison.OrdinalIgnoreCase))).ToArray();
             offset = Math.Min(offset, Math.Max(0,(rows.Length-1)/250*250)); visible = rows.Skip(offset).Take(250).ToArray();
-            grid.DataSource = visible.Select(e => new { e.EventId, e.Source.Title, Publisher = e.Source.Publisher, Published = e.Source.PublishedAt, Actors = string.Join(" / ",e.Actors), Scenarios = string.Join(",",e.Scenarios), Protocols = string.Join(",", e.Protocols), e.Severity, Confidence = components.GetValueOrDefault(e.ClusterId)?.Confidence ?? 0, e.Disputed }).ToArray();
+            grid.DataSource = visible.Select(e => new { e.EventId, e.Source.Title, Publisher = e.Source.Publisher, Published = e.Source.PublishedAt, IgnoredForScore = _ignoredIds.Contains(e.Source.RecordId), Actors = string.Join(" / ",e.Actors), Scenarios = string.Join(",",e.Scenarios), Protocols = string.Join(",", e.Protocols), e.Severity, Confidence = components.GetValueOrDefault(e.ClusterId)?.Confidence ?? 0, e.Disputed }).ToArray();
             count.Text = $"{offset + visible.Length}/{rows.Length} // archive loaded {_evidence.Length}";
         }
         _debounce.Tick += (_,_) => { _debounce.Stop(); Apply(); };
@@ -132,23 +231,101 @@ internal sealed class AssessmentForm : Form
         scenario.SelectedIndexChanged += (_,_) => { offset=0; Apply(); }; sourceClass.SelectedIndexChanged += (_,_) => { offset=0; Apply(); };
         corroborated.CheckedChanged += (_,_) => Apply(); disputed.CheckedChanged += (_,_) => Apply(); minConfidence.ValueChanged += (_,_) => Apply(); minSeverity.ValueChanged += (_,_) => Apply();
         next.Click += (_,_) => { offset+=250; Apply(); }; previous.Click += (_,_) => { offset=Math.Max(0,offset-250); Apply(); };
-        grid.CellDoubleClick += (_,e) => { if(e.RowIndex>=0 && e.RowIndex<visible.Length) ShowRecord(visible[e.RowIndex]); }; Apply();
+        EvidenceEvent? RecordAtRow(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= grid.Rows.Count) return null;
+            var id = grid.Rows[rowIndex].Cells[nameof(EvidenceEvent.EventId)].Value?.ToString();
+            return visible.FirstOrDefault(record => record.EventId == id);
+        }
+        EvidenceEvent? contextRecord = null;
+        var menu = new ContextMenuStrip();
+        var ignore = new ToolStripMenuItem("IGNORE THIS ARTICLE FOR SCORE…");
+        var restore = new ToolStripMenuItem("RESTORE THIS ARTICLE TO SCORE…");
+        var reviewIgnored = new ToolStripMenuItem("VIEW IGNORED NEWS / RESTORE…");
+        ignore.Click += async (_, _) => { if (contextRecord is { } record) await SetRecordIgnoredAsync(record, true); };
+        restore.Click += async (_, _) => { if (contextRecord is { } record) await SetRecordIgnoredAsync(record, false); };
+        reviewIgnored.Click += (_, _) =>
+        {
+            var ignored = new IgnoredNewsForm(_storage, _config);
+            ignored.AssessmentUpdated += assessment => { _current = assessment; AssessmentUpdated?.Invoke(assessment); _ = LoadAsync(); };
+            ignored.Show(this);
+        };
+        menu.Items.AddRange([ignore, restore, new ToolStripSeparator(), reviewIgnored]);
+        menu.Opening += (_, _) =>
+        {
+            var selected = contextRecord is not null;
+            ignore.Enabled = selected && !_ignoredIds.Contains(contextRecord!.Source.RecordId);
+            restore.Enabled = selected && _ignoredIds.Contains(contextRecord!.Source.RecordId);
+        };
+        grid.CellMouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right) return;
+            contextRecord = RecordAtRow(e.RowIndex);
+            if (e.RowIndex >= 0)
+            {
+                grid.ClearSelection();
+                grid.Rows[e.RowIndex].Selected = true;
+                grid.CurrentCell = grid.Rows[e.RowIndex].Cells[Math.Max(0,e.ColumnIndex)];
+            }
+        };
+        grid.ContextMenuStrip = menu;
+        grid.CellDoubleClick += (_,e) => { if (RecordAtRow(e.RowIndex) is { } record) ShowRecord(record); }; Apply();
+    }
+    private async Task SetRecordIgnoredAsync(EvidenceEvent record, bool ignored)
+    {
+        string reason;
+        if (ignored)
+        {
+            var input = IgnoredNewsForm.PromptIgnore(this, record.Source.Title);
+            if (input is null) return;
+            reason = input;
+        }
+        else
+        {
+            if (MessageBox.Show(this, $"Restore this article to new scores?\n\n{record.Source.Title}", "Restore ignored news",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            reason = "Restored by operator";
+        }
+        var saved = false;
+        try
+        {
+            if (!_storage.SetNewsIgnored(record.Source.RecordId, ignored, reason)) return;
+            saved = true;
+            _status.Text = ignored ? "ARTICLE IGNORED // RECALCULATING SCORE…" : "ARTICLE RESTORED // RECALCULATING SCORE…";
+            var assessment = await Task.Run(() => _storage.RefreshAssessment(new AssessmentEngine(_config.Assessment), _config, "MANUAL"));
+            if (IsDisposed) return;
+            AssessmentUpdated?.Invoke(assessment);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed)
+            {
+                if (saved) await LoadAsync();
+                MessageBox.Show(this, (saved ? "The change was saved, but the score could not be recalculated yet. Run a scan to retry." :
+                        "The selected article could not be changed.") + "\n\n" + ex.Message,
+                    saved ? "Score refresh failed" : "Article update failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
     }
     private void ShowCluster(string id)
     {
-        var e = _evidence.FirstOrDefault(e => e.ClusterId == id); if(e != null) ShowRecord(e);
+        var members = _evidence.Where(e => e.ClusterId == id).ToArray();
+        var e = members.FirstOrDefault(e => !_ignoredIds.Contains(e.Source.RecordId)) ?? members.FirstOrDefault();
+        if (e != null) ShowRecord(e);
+        else _status.Text += "\r\nSupporting records are no longer in the loaded evidence window; use archive search for retained history.";
     }
     private void ShowRecord(EvidenceEvent e)
     {
         var c = _current!.Contributions.FirstOrDefault(c => c.EventId == e.ClusterId);
         var family = _evidence.Where(x => x.ClusterId == e.ClusterId).Select(x => new { x.Source.RecordId, x.Source.Publisher, x.Source.Origin, x.Source.Url, x.Disputed, x.Retraction });
-        var details = new { Record = e, CurrentContribution = c, CorroborationAndSyndicationFamily = family, RelatedEvents = _evidence.Where(x => x.ClusterId != e.ClusterId && x.Actors.Intersect(e.Actors).Any() && x.Protocols.Intersect(e.Protocols).Any()).Take(20).Select(x => new{x.EventId,x.Source.Title,x.Source.Url}), ScoringVersion = _current.Version };
+        var details = new { Record = e, IgnoredForScore = _ignoredIds.Contains(e.Source.RecordId), CurrentContribution = c, CorroborationAndSyndicationFamily = family, RelatedEvents = _evidence.Where(x => x.ClusterId != e.ClusterId && x.Actors.Intersect(e.Actors).Any() && x.Protocols.Intersect(e.Protocols).Any()).Take(20).Select(x => new{x.EventId,x.Source.Title,x.Source.Url}), ScoringVersion = _current.Version };
         var form = new Form { Text = e.Source.Title, Size = new(1000,700), BackColor = UiTheme.Void, StartPosition = FormStartPosition.CenterParent };
         form.Controls.Add(Readout(JsonSerializer.Serialize(details,new JsonSerializerOptions{WriteIndented=true})));
         var button = UiTheme.Button("OPEN ORIGINAL SOURCE"); button.Dock = DockStyle.Bottom;
         button.Enabled = Uri.TryCreate(e.Source.Url,UriKind.Absolute,out var uri) && uri.Scheme is "http" or "https";
         button.Click += (_,_) => { try { Process.Start(new ProcessStartInfo(e.Source.Url){UseShellExecute=true}); } catch(Exception ex) { button.Text=ex.Message; } };
-        form.Controls.Add(button); form.Show(this);
+        form.Controls.Add(button); UiToolTips.Enable(form); form.Show(this);
     }
     private void BuildScenarios()
     {
@@ -175,7 +352,7 @@ internal sealed class AssessmentForm : Form
         a=await Task.Run(()=>_storage.AssessmentAt(a.Timestamp))??a;
         if(IsDisposed)return;
         var f = new Form { Text=$"Assessment {a.Timestamp:u}", Size=new(1000,650), StartPosition=FormStartPosition.CenterParent };
-        f.Controls.Add(Readout(JsonSerializer.Serialize(a,new JsonSerializerOptions{WriteIndented=true}))); f.Show(this);
+        f.Controls.Add(Readout(JsonSerializer.Serialize(a,new JsonSerializerOptions{WriteIndented=true}))); UiToolTips.Enable(f); f.Show(this);
     }
     private void BuildNarrative()
     {
@@ -224,7 +401,7 @@ internal sealed class AssessmentForm : Form
     private void BuildBacktest()
     {
         var page=Page("BACKTEST");var output=Readout("Choose an as-of timestamp. Replay uses publication AND first-seen cutoff; imported old articles are unavailable before ingestion.");page.Controls.Add(output);
-        var bar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=72};var at=new DateTimePicker{Format=DateTimePickerFormat.Custom,CustomFormat="yyyy-MM-dd HH:mm",Width=175,Value=DateTime.UtcNow};var run=UiTheme.Button("REPLAY UTC");var play=UiTheme.Button("PLAY / PAUSE");var speed=new NumericUpDown{Minimum=1,Maximum=168,Value=6,Width=50};var outcome=new ComboBox{Width=150,DropDownStyle=ComboBoxStyle.DropDownList};outcome.Items.AddRange(["FALSE POSITIVE","MISSED INDICATOR","DELAYED DETECTION"]);outcome.SelectedIndex=0;var notes=new TextBox{Width=200,PlaceholderText="Event ID / evaluation notes"};var save=UiTheme.Button("SAVE EVALUATION");
+        var bar=new WrappingToolbar{MinimumToolbarHeight=72};var at=new DateTimePicker{Format=DateTimePickerFormat.Custom,CustomFormat="yyyy-MM-dd HH:mm",Width=175,Value=DateTime.UtcNow};var run=UiTheme.Button("REPLAY UTC");var play=UiTheme.Button("PLAY / PAUSE");var speed=new NumericUpDown{Minimum=1,Maximum=168,Value=6,Width=50};var outcome=new ComboBox{Width=150,DropDownStyle=ComboBoxStyle.DropDownList};outcome.Items.AddRange(["FALSE POSITIVE","MISSED INDICATOR","DELAYED DETECTION"]);outcome.SelectedIndex=0;var notes=new TextBox{Width=200,PlaceholderText="Event ID / evaluation notes"};var save=UiTheme.Button("SAVE EVALUATION");
         bar.Controls.AddRange([at,run,play,new Label{Text="Hours / tick",AutoSize=true},speed,outcome,notes,save]);page.Controls.Add(bar);
         var scrub=new TrackBar{Dock=DockStyle.Top,Minimum=0,Maximum=1000,Value=1000,TickFrequency=100};page.Controls.Add(scrub);
         var first=_evidence.Select(e=>e.Source.FirstSeenAt).DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
@@ -291,7 +468,7 @@ internal sealed class AssessmentForm : Form
                     var feed=new FeedConfig{Name="Manual import",Url="https://example.invalid",Adapter=Path.GetExtension(path)==".csv"?"csv":"json",SourceClass="D"};
                     var entries=SourceAdapters.For(feed.Adapter).Parse(File.ReadAllText(path),feed);var inserted=0;
                     foreach(var e in entries)if(!string.IsNullOrWhiteSpace(e.Title)&&_storage.InsertArticle(AssessmentEngine.Hash(e.Url+"|"+e.Title+"|"+e.Published),feed.Name,e.Title,e.Url,e.Published,e.Summary))inserted++;
-                    _storage.RefreshAssessment(new AssessmentEngine(_config.Assessment),_config);return inserted;
+                    _storage.RefreshAssessment(new AssessmentEngine(_config.Assessment),_config,"IMPORT");return inserted;
                 });
                 if(!IsDisposed)text.Text=$"Imported {count} new metadata records. Reopen the console to refresh all views.\r\n"+text.Text;
             }
@@ -299,7 +476,7 @@ internal sealed class AssessmentForm : Form
             finally{if(!IsDisposed)import.Enabled=true;}
         };
     }
-    protected override void Dispose(bool disposing){if(disposing){_debounce.Dispose();_playback.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing){if(disposing){_refreshTimer.Dispose();_debounce.Dispose();_playback.Dispose();}base.Dispose(disposing);}
 }
 
 internal static class AssessmentExport

@@ -6,6 +6,8 @@ internal sealed class AppConfig
 {
     [JsonPropertyName("archive_enabled")]
     public bool ArchiveEnabled { get; init; } = true;
+    [JsonPropertyName("archive_concurrency")]
+    public int ArchiveConcurrency { get; init; } = 6;
     [JsonPropertyName("assessment")]
     public AssessmentSettings Assessment { get; init; } = new();
     [JsonPropertyName("poll_minutes")]
@@ -32,6 +34,8 @@ internal sealed class AppConfig
         config.Assessment.Validate();
         if (!double.IsFinite(config.PollMinutes) || config.PollMinutes <= 0 || config.PollMinutes > 1440)
             throw new InvalidDataException("poll_minutes must be greater than zero.");
+        if (config.ArchiveConcurrency is < 1 or > 12)
+            throw new InvalidDataException("archive_concurrency must be between 1 and 12.");
 
         foreach (var feed in config.Feeds)
         {
@@ -115,7 +119,9 @@ internal sealed record DashboardEvent(
     int SourceWeight,
     string Url,
     DateTime DetectedAt,
-    bool Alerted);
+    bool Alerted,
+    bool IsRuleAlert = false,
+    string ArticleHash = "");
 
 internal sealed record DashboardStats(
     int TotalArticles,

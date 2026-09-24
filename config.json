@@ -30,7 +30,52 @@
     {
       "name": "US Defense Department",
       "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50",
-      "weight": 9
+      "weight": 9,
+      "group": "Official defense",
+      "source_class": "A",
+      "source_quality": 0.9,
+      "origin": "U.S. Department of Defense",
+      "original_reporting": true
+    },
+    {
+      "name": "US State Department Press",
+      "url": "https://www.state.gov/feed/?post_type=press-releases",
+      "weight": 8,
+      "group": "Official diplomacy",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "U.S. Department of State",
+      "original_reporting": true
+    },
+    {
+      "name": "UK Ministry of Defence",
+      "url": "https://www.gov.uk/government/organisations/ministry-of-defence.atom",
+      "weight": 8,
+      "group": "Official defense",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "UK Ministry of Defence",
+      "original_reporting": true
+    },
+    {
+      "name": "UN News",
+      "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+      "weight": 8,
+      "group": "International organization",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "United Nations",
+      "original_reporting": true
+    },
+    {
+      "name": "IAEA Top News",
+      "url": "https://www.iaea.org/feeds/topnews",
+      "weight": 9,
+      "group": "International organization",
+      "source_class": "A",
+      "source_quality": 0.9,
+      "origin": "International Atomic Energy Agency",
+      "original_reporting": true
     },
     {
       "name": "USNI News",
@@ -51,6 +96,432 @@
       "name": "CISA Cyber Advisories",
       "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
       "weight": 9
+    },
+    {
+      "name": "Africanews",
+      "url": "https://africanews.com/feed/rss",
+      "weight": 6,
+      "group": "Africa regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Africanews",
+      "language": "en"
+    },
+    {
+      "name": "Google News - Africa Security",
+      "url": "https://news.google.com/rss/search?q=%28Africa+OR+Egypt+OR+Ethiopia+OR+Sudan+OR+Somalia+OR+Nigeria+OR+Kenya+OR+%22South+Africa%22%29+%28security+OR+defense+OR+defence+OR+military+OR+conflict+OR+ceasefire+OR+mobilization%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3,
+      "group": "Africa regional discovery",
+      "source_class": "C",
+      "source_quality": 0.5,
+      "origin": "Google News Africa"
+    },
+    {
+      "name": "Government of Canada - National Defence",
+      "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?atomtitle=National+Defence&dept=departmentnationaldefense&format=atom&orderBy=desc&pick=100&publishedDate%3E=2021-10-25&sort=publishedDate",
+      "adapter": "atom",
+      "weight": 8,
+      "group": "North America official defense",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "Government of Canada - National Defence",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "Google News - North America Security",
+      "url": "https://news.google.com/rss/search?q=%28Canada+OR+Mexico+OR+%22United+States%22%29+%28security+OR+defense+OR+defence+OR+military+OR+border+OR+NORAD+OR+%22joint+command%22%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3,
+      "group": "North America regional discovery",
+      "source_class": "C",
+      "source_quality": 0.5,
+      "origin": "Google News North America"
+    },
+    {
+      "name": "Prensa Libre - Guatemala",
+      "url": "https://www.prensalibre.com/rss",
+      "weight": 6,
+      "group": "Central America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "Prensa Libre",
+      "language": "es"
+    },
+    {
+      "name": "Radio HRN - Honduras",
+      "url": "https://www.radiohrn.hn/rss/nacionales.xml",
+      "weight": 6,
+      "group": "Central America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.64,
+      "origin": "Radio HRN",
+      "language": "es"
+    },
+    {
+      "name": "The Tico Times - Costa Rica",
+      "url": "https://ticotimes.net/feed/",
+      "weight": 6,
+      "group": "Central America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "The Tico Times",
+      "language": "en"
+    },
+    {
+      "name": "Panama Canal Authority",
+      "url": "https://pancanal.com/feed/",
+      "weight": 8,
+      "group": "Central America official infrastructure",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "Panama Canal Authority",
+      "original_reporting": true,
+      "language": "es"
+    },
+    {
+      "name": "Google News - Central America Security",
+      "url": "https://news.google.com/rss/search?q=%28Guatemala+OR+Honduras+OR+%22El+Salvador%22+OR+Nicaragua+OR+%22Costa+Rica%22+OR+Panama+OR+Belize%29+%28defense+OR+military+OR+border+OR+security+OR+conflict+OR+%22Panama+Canal%22%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3,
+      "group": "Central America regional discovery",
+      "source_class": "C",
+      "source_quality": 0.5,
+      "origin": "Google News Central America",
+      "language": "en"
+    },
+    {
+      "name": "MercoPress - Latin America",
+      "url": "https://en.mercopress.com/rss/latin-america",
+      "weight": 6,
+      "group": "South America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "MercoPress",
+      "language": "en"
+    },
+    {
+      "name": "Google News - South America Security",
+      "url": "https://news.google.com/rss/search?q=%28Brazil+OR+Argentina+OR+Colombia+OR+Venezuela+OR+Chile+OR+Peru%29+%28security+OR+defense+OR+defence+OR+military+OR+border+OR+conflict+OR+mobilization%29&hl=en-US&gl=US&ceid=US%3Aen",
+      "weight": 3,
+      "group": "South America regional discovery",
+      "source_class": "C",
+      "source_quality": 0.5,
+      "origin": "Google News South America"
+    },
+    {
+      "name": "Channel News Asia - Asia",
+      "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511",
+      "weight": 7,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.72,
+      "origin": "Channel News Asia",
+      "language": "en"
+    },
+    {
+      "name": "Korea.net News",
+      "url": "https://www.korea.net/koreanet/rss/news/2",
+      "weight": 8,
+      "group": "Asia official public information",
+      "source_class": "A",
+      "source_quality": 0.8,
+      "origin": "Government of Korea",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "The Japan Times",
+      "url": "https://www.japantimes.co.jp/feed/",
+      "weight": 7,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.7,
+      "origin": "The Japan Times",
+      "language": "en"
+    },
+    {
+      "name": "Le Monde - Asia and Pacific",
+      "url": "https://www.lemonde.fr/en/asia-and-pacific/rss_full.xml",
+      "weight": 6,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Le Monde",
+      "language": "en"
+    },
+    {
+      "name": "France 24 English",
+      "url": "https://www.france24.com/en/rss",
+      "weight": 7,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.72,
+      "origin": "France 24",
+      "language": "en"
+    },
+    {
+      "name": "Le Monde - Europe",
+      "url": "https://www.lemonde.fr/en/europe/rss_full.xml",
+      "weight": 6,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Le Monde",
+      "language": "en"
+    },
+    {
+      "name": "Council of the EU - Press Releases",
+      "url": "https://www.consilium.europa.eu/en/rss/pressreleases.ashx",
+      "weight": 8,
+      "group": "Europe official diplomacy",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "Council of the European Union",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "Deutsche Welle English",
+      "url": "https://rss.dw.com/rdf/rss-en-top",
+      "weight": 7,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.72,
+      "origin": "Deutsche Welle",
+      "language": "en"
+    },
+    {
+      "name": "Al Jazeera English",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "weight": 7,
+      "group": "Middle East regional journalism",
+      "source_class": "B",
+      "source_quality": 0.7,
+      "origin": "Al Jazeera English",
+      "language": "en"
+    },
+    {
+      "name": "Le Monde - Middle East",
+      "url": "https://www.lemonde.fr/en/middle-east/rss_full.xml",
+      "weight": 6,
+      "group": "Middle East regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Le Monde",
+      "language": "en"
+    },
+    {
+      "name": "AllAfrica Headlines",
+      "url": "https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf",
+      "weight": 6,
+      "group": "Africa regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "AllAfrica",
+      "language": "en"
+    },
+    {
+      "name": "Le Monde - Africa",
+      "url": "https://www.lemonde.fr/en/le-monde-africa/rss_full.xml",
+      "weight": 6,
+      "group": "Africa regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Le Monde",
+      "language": "en"
+    },
+    {
+      "name": "DVIDS News",
+      "url": "https://www.dvidshub.net/rss/news",
+      "weight": 8,
+      "group": "North America official defense",
+      "source_class": "A",
+      "source_quality": 0.82,
+      "origin": "DVIDS",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "News Americas Now",
+      "url": "https://newsamericasnow.com/feed/",
+      "weight": 5,
+      "group": "South America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.6,
+      "origin": "News Americas Now",
+      "language": "en"
+    },
+    {
+      "name": "Le Monde - Americas",
+      "url": "https://www.lemonde.fr/en/americas/rss_full.xml",
+      "weight": 6,
+      "group": "South America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Le Monde",
+      "language": "en"
+    },
+    {
+      "name": "The Hindu - International",
+      "url": "https://www.thehindu.com/news/international/feeder/default.rss",
+      "weight": 7,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.7,
+      "origin": "The Hindu",
+      "language": "en"
+    },
+    {
+      "name": "The Straits Times - Asia",
+      "url": "https://www.straitstimes.com/news/asia/rss.xml",
+      "weight": 7,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.7,
+      "origin": "The Straits Times",
+      "language": "en"
+    },
+    {
+      "name": "Radio Free Asia",
+      "url": "https://www.rfa.org/english/rss2.xml",
+      "weight": 6,
+      "group": "Asia regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Radio Free Asia",
+      "language": "en"
+    },
+    {
+      "name": "Euronews",
+      "url": "https://www.euronews.com/rss?level=theme&name=news",
+      "weight": 7,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "Euronews",
+      "language": "en"
+    },
+    {
+      "name": "POLITICO Europe",
+      "url": "https://www.politico.eu/feed/",
+      "weight": 7,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "POLITICO Europe",
+      "language": "en"
+    },
+    {
+      "name": "EUobserver",
+      "url": "https://euobserver.com/rss",
+      "weight": 6,
+      "group": "Europe regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "EUobserver",
+      "language": "en"
+    },
+    {
+      "name": "The Times of Israel",
+      "url": "https://www.timesofisrael.com/feed/",
+      "weight": 7,
+      "group": "Middle East regional journalism",
+      "source_class": "B",
+      "source_quality": 0.68,
+      "origin": "The Times of Israel",
+      "language": "en"
+    },
+    {
+      "name": "Arab News",
+      "url": "https://www.arabnews.com/rss.xml",
+      "weight": 6,
+      "group": "Middle East regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "Arab News",
+      "language": "en"
+    },
+    {
+      "name": "Middle East Eye",
+      "url": "https://www.middleeasteye.net/rss",
+      "weight": 6,
+      "group": "Middle East regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "Middle East Eye",
+      "language": "en"
+    },
+    {
+      "name": "Premium Times Nigeria",
+      "url": "https://www.premiumtimesng.com/feed",
+      "weight": 6,
+      "group": "Africa regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "Premium Times Nigeria",
+      "language": "en"
+    },
+    {
+      "name": "The Africa Report",
+      "url": "https://www.theafricareport.com/feed/",
+      "weight": 6,
+      "group": "Africa regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "The Africa Report",
+      "language": "en"
+    },
+    {
+      "name": "Global Affairs Canada",
+      "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?atomtitle=Global+Affairs+Canada+news&dept=departmentofforeignaffairstradeanddevelopment&format=atom&orderBy=desc&pick=100&publishedDate%3E=2021-10-25&sort=publishedDate",
+      "adapter": "atom",
+      "weight": 8,
+      "group": "North America official diplomacy",
+      "source_class": "A",
+      "source_quality": 0.85,
+      "origin": "Government of Canada - Global Affairs",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "Global News - U.S.",
+      "url": "https://globalnews.ca/us-news/feed/",
+      "weight": 6,
+      "group": "North America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "Global News",
+      "language": "en"
+    },
+    {
+      "name": "Diálogo Americas",
+      "url": "https://dialogo-americas.com/feed/",
+      "weight": 8,
+      "group": "South America official regional security",
+      "source_class": "A",
+      "source_quality": 0.8,
+      "origin": "U.S. Southern Command",
+      "original_reporting": true,
+      "language": "en"
+    },
+    {
+      "name": "InSight Crime",
+      "url": "https://insightcrime.org/feed/",
+      "weight": 6,
+      "group": "South America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.65,
+      "origin": "InSight Crime",
+      "language": "en"
+    },
+    {
+      "name": "The Rio Times",
+      "url": "https://www.riotimesonline.com/feed/",
+      "weight": 5,
+      "group": "South America regional journalism",
+      "source_class": "B",
+      "source_quality": 0.58,
+      "origin": "The Rio Times",
+      "language": "en"
     }
   ]
 }

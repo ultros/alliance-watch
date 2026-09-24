@@ -14,6 +14,27 @@ internal static class Program
         if (!File.Exists(Path.Combine(appDirectory, "config.json")))
             appDirectory = AppContext.BaseDirectory;
 
+        if (args.Contains("--dedupe-images"))
+        {
+            var database = Path.Combine(appDirectory, "alliance_watch.db");
+            if (!File.Exists(database)) throw new FileNotFoundException("The archive database was not found.", database);
+            var storage = new Storage(database);
+            storage.Initialize();
+            Console.WriteLine("Backing up archive before image consolidation…");
+            var backup = storage.BackupBeforeImageConsolidation();
+            Console.WriteLine("Backup: " + backup);
+            var result = storage.ConsolidateImages((done, total) =>
+            {
+                if (done == total || done % 500 == 0) Console.WriteLine($"Linked {done:N0}/{total:N0} legacy images…");
+            });
+            storage.VerifyImageStorage();
+            Console.WriteLine($"Verified {result.Links:N0} article links to {result.UniqueBlobs:N0} stored images. Compacting database…");
+            storage.CompactDatabase();
+            storage.VerifyImageStorage();
+            Console.WriteLine($"Complete. Avoided {result.ReclaimedBytes:N0} duplicate payload bytes.");
+            return;
+        }
+
         try
         {
             var config = AppConfig.Load(Path.Combine(appDirectory, "config.json"));

@@ -14,11 +14,17 @@ internal sealed class AssessmentSettings
     public ProtocolDefinition[] Protocols { get; set; } = ProtocolCatalog.Defaults;
     public ScenarioDefinition[] Scenarios { get; set; } =
     [
-        new("russia-nato", "Russia / NATO", ["Russia", "NATO"], "Europe"),
-        new("taiwan", "Taiwan Strait / China / United States", ["Taiwan", "China"], "East Asia"),
-        new("korea", "Korean Peninsula", ["North Korea", "South Korea"], "Korea"),
-        new("middle-east", "Middle East interstate escalation", ["Iran", "Israel"], "Middle East"),
-        new("india-pakistan", "India / Pakistan", ["India", "Pakistan"], "South Asia")
+        new("russia-nato", "Russia / NATO", ["Russia", "NATO"], "Europe", "Europe"),
+        new("taiwan", "Taiwan Strait / China / United States", ["Taiwan", "China"], "East Asia", "Asia"),
+        new("korea", "Korean Peninsula", ["North Korea", "South Korea"], "Korea", "Asia"),
+        new("middle-east", "Middle East interstate escalation", ["Iran", "Israel"], "Middle East", "Middle East"),
+        new("india-pakistan", "India / Pakistan", ["India", "Pakistan"], "South Asia", "Asia"),
+        // Regional lenses require two named regional actors, avoiding continent-wide
+        // scoring from a single incidental mention in a global source.
+        new("africa-regional", "Africa regional security", ["Egypt", "Ethiopia", "Sudan", "Somalia", "Nigeria", "South Africa", "Kenya"], "Africa", "Africa", 2),
+        new("north-america-regional", "North America regional security", ["United States", "Canada", "Mexico"], "North America", "North America", 2),
+        new("central-america-regional", "Central America regional security", ["Belize", "Guatemala", "Honduras", "El Salvador", "Nicaragua", "Costa Rica", "Panama"], "Central America", "Central America", 2),
+        new("south-america-regional", "South America regional security", ["Brazil", "Argentina", "Colombia", "Venezuela", "Chile", "Peru"], "South America", "South America", 2)
     ];
     public Dictionary<string, string[]> ActorAliases { get; set; } = new()
     {
@@ -27,7 +33,18 @@ internal sealed class AssessmentSettings
         ["Russia"] = ["Russia", "Russian", "Moscow"], ["China"] = ["China", "Chinese", "Beijing"],
         ["Taiwan"] = ["Taiwan", "Taipei"], ["North Korea"] = ["North Korea", "DPRK", "Pyongyang"],
         ["South Korea"] = ["South Korea", "Seoul"], ["Iran"] = ["Iran", "Iranian"],
-        ["Israel"] = ["Israel", "Israeli"], ["India"] = ["India", "Indian"], ["Pakistan"] = ["Pakistan", "Pakistani"]
+        ["Israel"] = ["Israel", "Israeli"], ["India"] = ["India", "Indian"], ["Pakistan"] = ["Pakistan", "Pakistani"],
+        ["Egypt"] = ["Egypt", "Egyptian", "Cairo"], ["Ethiopia"] = ["Ethiopia", "Ethiopian", "Addis Ababa"],
+        ["Sudan"] = ["Sudan", "Sudanese", "Khartoum"], ["Somalia"] = ["Somalia", "Somali", "Mogadishu"],
+        ["Nigeria"] = ["Nigeria", "Nigerian", "Abuja"], ["South Africa"] = ["South Africa", "South African", "Pretoria"], ["Kenya"] = ["Kenya", "Kenyan", "Nairobi"],
+        ["Canada"] = ["Canada", "Canadian", "Ottawa"], ["Mexico"] = ["Mexico", "Mexican", "Mexico City"],
+        ["Belize"] = ["Belize", "Belizean"], ["Guatemala"] = ["Guatemala", "Guatemalan"],
+        ["Honduras"] = ["Honduras", "Honduran"], ["El Salvador"] = ["El Salvador", "Salvadoran"],
+        ["Nicaragua"] = ["Nicaragua", "Nicaraguan"], ["Costa Rica"] = ["Costa Rica", "Costa Rican"],
+        ["Panama"] = ["Panama", "Panamá", "Panamanian"],
+        ["Brazil"] = ["Brazil", "Brazilian", "Brasilia"], ["Argentina"] = ["Argentina", "Argentine", "Buenos Aires"],
+        ["Colombia"] = ["Colombia", "Colombian", "Bogota", "Bogotá"], ["Venezuela"] = ["Venezuela", "Venezuelan", "Caracas"],
+        ["Chile"] = ["Chile", "Chilean", "Santiago"], ["Peru"] = ["Peru", "Peruvian", "Lima"]
     };
     public string[] NarrativeTerms { get; set; } = ["collective defense", "mutual defense", "national emergency", "wartime footing", "mobilization", "defense of allies", "all necessary measures", "strategic deterrence", "evacuate nationals", "military response", "joint command", "war economy", "territorial integrity", "red line"];
     public void Validate()
@@ -36,12 +53,12 @@ internal sealed class AssessmentSettings
             throw new InvalidDataException("Invalid assessment normalization, version, bonus or threshold.");
         if (Protocols.Length != 30 || Protocols.Select(p => p.Id).Distinct().Count() != 30 || Protocols.Any(p => p.Id is < 1 or > 30 || !double.IsFinite(p.HalfLifeHours) || p.HalfLifeHours <= 0 || !double.IsFinite(p.Severity) || p.Severity is < 0 or > 10 || p.Patterns.Length == 0 || p.RequiredIndependentSources < 1))
             throw new InvalidDataException("Exactly 30 unique protocols (01–30), positive half-lives and severity 0–10 are required.");
-        if (Scenarios.Select(s => s.Id).Distinct().Count() != Scenarios.Length || Scenarios.Any(s => string.IsNullOrWhiteSpace(s.Id) || s.Actors.Length == 0))
+        if (Scenarios.Select(s => s.Id).Distinct().Count() != Scenarios.Length || Scenarios.Any(s => string.IsNullOrWhiteSpace(s.Id) || s.Actors.Length == 0 || string.IsNullOrWhiteSpace(s.Theater) || s.MinimumMatchedActors is < 1 || s.MinimumMatchedActors > s.Actors.Length))
             throw new InvalidDataException("Scenario IDs must be unique and actor lists nonempty.");
         foreach (var p in Protocols) foreach (var pattern in p.Patterns.Concat(p.Exclusions)) _ = ProtocolCatalog.Pattern(pattern);
     }
 }
-internal sealed record ScenarioDefinition(string Id, string Name, string[] Actors, string Geography);
+internal sealed record ScenarioDefinition(string Id, string Name, string[] Actors, string Geography, string Theater = "Global", int MinimumMatchedActors = 1);
 internal sealed record SourceRecord(string RecordId, string Title, string Summary, string Url, string Publisher, DateTimeOffset PublishedAt, DateTimeOffset FirstSeenAt, double Quality, string Origin, string Tier = "C", string Language = "und", bool OriginalReporting = false);
 internal sealed record EvidenceEvent(string EventId, SourceRecord Source, string CanonicalUrl, string CanonicalHash, string ClusterId, string[] Actors, string[] Scenarios, string[] Geography, int[] Protocols, double Severity, double HalfLifeHours, bool Disputed, bool Retraction, string[] NarrativeTerms, string ParserVersion = "rules-1.0")
 {
@@ -89,7 +106,7 @@ internal sealed class AssessmentEngine
         var text = source.Title + " " + source.Summary;
         var actors = _actors.Where(a => a.Patterns.Any(p => p.IsMatch(text))).Select(a => a.Actor).ToArray();
         var protocols = _protocols.Where(p => p.Patterns.Any(r => r.IsMatch(text)) && !p.Exclusions.Any(r => r.IsMatch(text)) && (p.Rule.ActorConstraints.Length == 0 || p.Rule.ActorConstraints.Intersect(actors).Any())).Select(p => p.Rule).ToArray();
-        var scenarios = _settings.Scenarios.Where(s => s.Actors.Intersect(actors).Any()).ToArray();
+        var scenarios = _settings.Scenarios.Where(s => s.Actors.Intersect(actors).Count() >= s.MinimumMatchedActors).ToArray();
         var geography = scenarios.Select(s => s.Geography).Distinct().ToArray();
         protocols = protocols.Where(p => p.GeographyConstraints.Length == 0 || p.GeographyConstraints.Intersect(geography).Any()).ToArray();
         // An event family is separate from its originating-report/source family.
@@ -153,17 +170,8 @@ internal sealed class AssessmentEngine
         var total = scenarios.Sum(s => s.RawScore);
         var risk = NormalizeScore(total);
         var contributions = components.ToArray();
-        var old = previous?.Contributions.ToDictionary(c => c.EventId) ?? new();
-        var current = contributions.ToDictionary(c => c.EventId);
-        var changes = old.Keys.Union(current.Keys).Select(id =>
-        {
-            var before = old.GetValueOrDefault(id); var after = current.GetValueOrDefault(id);
-            var b = before?.RawScore ?? 0; var a = after?.RawScore ?? 0;
-            return new ScoreChange(id, (after ?? before)!.Title + (before == null ? " [new evidence]" : after?.Recency < before.Recency && a < b ? " [decay / evidence revision]" : " [evidence revision]"), b, a, a - b);
-        }).Where(c => Math.Abs(c.Delta) > 1e-9).ToList();
         var bonusTotal = scenarios.Sum(s => s.Convergence);
-        changes.Add(new("convergence", "Independent protocol convergence", previous?.Convergence ?? 0, bonusTotal, bonusTotal - (previous?.Convergence ?? 0)));
-        changes.Add(new("normalization", "0–100 normalization adjustment", (previous?.Risk ?? 0) - (previous?.RawScore ?? 0), risk - total, (risk - total) - ((previous?.Risk ?? 0) - (previous?.RawScore ?? 0))));
+        var changes = ExplainChanges(contributions, risk, total, bonusTotal, previous);
         var vector = new Dictionary<string, double?>();
         foreach (var (label, hours) in new[] { ("6H",6), ("24H",24), ("72H",72), ("7D",168), ("30D",720) })
         {
@@ -175,8 +183,28 @@ internal sealed class AssessmentEngine
         // Higher war classifications need verified human adjudication; keywords cannot establish them.
         var ladder = supported.Contains(29) ? 6 : supported.Contains(7) ? 4 : supported.Overlaps([8, 15, 17]) ? 3 : supported.Overlaps([9, 23]) ? 2 : supported.Contains(22) ? 1 : 0;
         var activeComponents = contributions.Where(c => c.Recency > .25).ToArray();
-        return new(at, _settings.Version, risk, total, activeComponents.Length == 0 ? 0 : activeComponents.Average(c => c.Confidence), momentum, risk - (previous?.Risk ?? 0), bonusTotal, ladder, contributions, scenarios, changes.ToArray(), vector, Hash(System.Text.Json.JsonSerializer.Serialize(_settings)))
+        return new(at, _settings.Version, risk, total, activeComponents.Length == 0 ? 0 : activeComponents.Average(c => c.Confidence), momentum, risk - (previous?.Risk ?? 0), bonusTotal, ladder, contributions, scenarios, changes, vector, Hash(System.Text.Json.JsonSerializer.Serialize(_settings)))
         {ArticleCount=eligible.Length,EventCount=contributions.Length,ProtocolCount=contributions.SelectMany(c=>c.Protocols).Distinct().Count()};
+    }
+    // Recompute the bridge for any two stored assessments, not just adjacent scans.
+    // The dashboard rounds Risk to an integer, so a useful explanation may span
+    // several nearly identical intervening snapshots.
+    internal static ScoreChange[] ExplainChanges(Assessment current, Assessment previous) =>
+        ExplainChanges(current.Contributions, current.Risk, current.RawScore, current.Convergence, previous);
+
+    private static ScoreChange[] ExplainChanges(Contribution[] contributions, double risk, double rawScore, double convergence, Assessment? previous)
+    {
+        var old = previous?.Contributions.ToDictionary(c => c.EventId) ?? new();
+        var current = contributions.ToDictionary(c => c.EventId);
+        var changes = old.Keys.Union(current.Keys).Select(id =>
+        {
+            var before = old.GetValueOrDefault(id); var after = current.GetValueOrDefault(id);
+            var b = before?.RawScore ?? 0; var a = after?.RawScore ?? 0;
+            return new ScoreChange(id, (after ?? before)!.Title + (before == null ? " [new evidence]" : after?.Recency < before.Recency && a < b ? " [decay / evidence revision]" : " [evidence revision]"), b, a, a - b);
+        }).Where(c => Math.Abs(c.Delta) > 1e-9).ToList();
+        changes.Add(new("convergence", "Independent protocol convergence", previous?.Convergence ?? 0, convergence, convergence - (previous?.Convergence ?? 0)));
+        changes.Add(new("normalization", "0–100 normalization adjustment", (previous?.Risk ?? 0) - (previous?.RawScore ?? 0), risk - rawScore, (risk - rawScore) - ((previous?.Risk ?? 0) - (previous?.RawScore ?? 0))));
+        return changes.ToArray();
     }
     private double NormalizeScore(double raw) => 100 * (1 - Math.Exp(-Math.Max(0, raw) / _settings.NormalizationScale));
     private static readonly Regex FigurePattern=new(@"\b(?<n>\d[\d,]*)\s+(?<unit>troops|soldiers|casualties|aircraft|tanks)\b",RegexOptions.IgnoreCase|RegexOptions.Compiled,TimeSpan.FromMilliseconds(100));

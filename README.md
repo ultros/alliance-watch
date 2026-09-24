@@ -29,20 +29,105 @@ The interface starts in borderless full-screen mode. Use the header controls to 
 to the next monitor, minimize, restore to a resizable window, or close. Drag the
 `ALLIANCEWATCH` title area to move a restored window between screens. `F11` toggles
 full-screen, `Ctrl+Shift+Left/Right` moves between monitors, and `Esc` exits.
+At shorter window heights, scroll the right rail to reach every operator action;
+filter bars in the secondary windows wrap to keep their controls accessible.
 
 Use **RUN ACTIVE SCAN** to run a collection cycle (per-feed due times and backoff still
 apply), **ASSESSMENT CONSOLE** or click the gauge for the assessment views, and
 **OPEN CONFIGURATION** to edit `config.json`. Restart after configuration changes.
 Double-click a record for its evidence panel and source link. The alert center shows
-deduplicated assessment rules; historical article scores remain available as legacy data.
+new actionable protocol signals alongside deduplicated assessment rules. Dismissing a
+signal acknowledges that alert without changing its historical record.
+
+**INDEX CONTEXT** replaces the recent-article sparkline with 6-hour, 24-hour and
+7-day index changes and the two largest current evidence contributors. Each signal
+shows its share of raw evidence weight, confidence and reporting origins; click it
+to inspect the supporting records. Percentages describe evidence weight before
+convergence and final scaling. A dash means the historical baseline is unavailable.
+The left rail scrolls on smaller screens.
+
+The search box above the main news table (or `Ctrl+F`) opens **ALL-ARTICLE ARCHIVE
+SEARCH**. It searches the complete local history, not just recent dashboard rows,
+including ignored articles, headline/source/date fields, linked signals and evidence,
+image metadata, and saved compressed article text. Enter runs a literal search;
+leave the box empty to page through all articles. Searches are cancellable and show
+progress. Select a result to preview its locally archived text or open its full
+database record.
+
+Right-click a news row in the main table or **EVIDENCE SEARCH** to **Ignore this
+article for score**. The action prompts for an optional reason and immediately
+recalculates the current index. It hides that article from the main news list but
+does not delete its original article, normalized evidence, or past assessments.
+Use **IGNORED NEWS / RESTORE** in Operator Control to search and restore excluded
+articles. The database browser also exposes active ignored news and an append-only
+ignore/restore log. Because reports are grouped into event families, excluding one
+article may leave a score contribution from other independent articles.
 
 Every newly discovered article is also archived inside SQLite. The
 `article_archives` table stores losslessly gzip-compressed full response HTML and
-extracted article text. `article_images` stores linked gzip-compressed image blobs
-with their source URL, MIME type, byte sizes, order, and alt text. Existing article
+extracted article text. `image_blobs` stores each distinct compressed image once by
+SHA-256; `article_images` keeps the links to every article, plus source URL, MIME type,
+byte sizes, order, and alt text. Existing article
 rows are backfilled in a bounded background worker, while failed downloads are recorded
-and retried on later collection cycles. Set `archive_enabled` to `false` to disable
-new full-page/image downloads. Exports always omit full article text and images.
+and retried with backoff so an unavailable site cannot stall the queue. The worker
+keeps processing between feed scans, downloading up to six articles concurrently.
+Set `archive_concurrency` to a value from 1 to 12 to adjust this limit, or
+`archive_enabled` to `false` to disable new full-page/image downloads. Restart after
+changing these settings. Slow or failed images are skipped while retaining the
+downloaded page and successful images. The pending count refreshes between scans;
+it includes failed pages waiting for a scheduled retry. Exports always omit full
+article text and images.
+
+Open **DATABASE BROWSER** to inspect retained records and archived images. Its search
+checks the full selected dataset, and table controls show the total row count and let
+you jump directly to a page. In **ARCHIVED IMAGES**, switch to **GALLERY VIEW** to
+scroll every image matching the current date, search, and article scope. The gallery
+starts with **UNIQUE IMAGES**; switch to **ARTICLE LINKS** to see every occurrence. Thumbnails
+load near the visible area and remain in a bounded memory cache. Single-click an
+image for its preview; double-click it or press Enter to see all linked articles in
+the table (or the exact occurrence in **ARTICLE LINKS** mode). The article dropdown lists recent entries; the adjacent field accepts an
+image ID or full article hash anywhere in the archive. `Ctrl+F` focuses search,
+`F5` refreshes, and Escape clears search.
+
+For older archives that still contain inline image payloads, close the app and run
+`dotnet AllianceWatch.dll --dedupe-images` from the deployed app folder. This makes a
+verified timestamped backup, moves duplicate payloads to the shared store in resumable
+batches, checks that every image link resolves, and compacts the live SQLite file.
+Keep the backup until you have reviewed the migrated gallery; the backup itself still
+occupies disk space.
+
+Open **OPERATIONS WORKSPACE** for eight follow-on workflows: theatre coverage and
+feed freshness; the change since the prior completed scan; side-by-side claim-family
+reports; a personal theatre/actor/protocol watchlist; append-only analyst reviews;
+data-quality warnings; a local what-if lab; and verified backup/restore-copy checks.
+The small footer badge opens coverage directly. `F5` reloads the workspace.
+Claim comparison searches the entire recent in-memory result and displays 250 families
+per page. Linked corrections appear with the original family when the parent record
+is within the loaded window. The workspace refuses a silent partial result if its
+100,000-recent-record capacity is exceeded.
+
+Watchlist alerts require a newly scored or materially strengthened event with raw
+score at least 1 and evidence confidence at or above the chosen threshold. They do
+not back-alert on existing records when a watch is added. Analyst review flags are
+separate from, and never rewrite, collected evidence or live assessments. What-if
+replay adjusts only selected settings and stored source-quality inputs in memory;
+it does not forecast events or save a new live score.
+
+**CREATE VERIFIED BACKUP** uses SQLite's consistent backup mechanism, runs an
+integrity/schema check and never overwrites an existing file. **TEST RESTORE TO
+COPY** creates another verified database at a new path, leaving the live database
+untouched. Use **INSPECT VERIFIED BACKUP** to browse it read-only. This is not an
+in-place live restore; keep the backup in a separate safe location.
+
+`config.json` contains regional feeds for Asia, Europe, the Middle East, Africa,
+North America, Central America, and South America. The first three are the main
+display focus. Central America covers Belize, Guatemala, Honduras, El Salvador,
+Nicaragua, Costa Rica, and Panama. Its regional scenario requires two named
+regional actors; an isolated country mention does not activate it. The new
+theatre has local journalism, an official Panama Canal feed, and an English
+discovery feed. Spanish-language feeds are collected, but the assessment rules
+are primarily English-language, so those articles may require manual review.
+Feed health is visible in the app; a missing or delayed feed can affect coverage.
 
 To build a release executable:
 

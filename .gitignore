@@ -4,6 +4,7 @@ alliance_watch.db-wal
 alliance_watch.db-shm
 bin/
 obj/
+release-next/
 *.user
 assessment-ui-smoke.db*
 assessment-benchmark.db*
@@ -28,3 +29,4 @@ assessment-scoring-fingerprint*.txt
 alert-center-fixed.png
 alliancewatch-*.png
 icons-crop*.png
+index-context-preview.png
