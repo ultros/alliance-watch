@@ -85,9 +85,13 @@ scroll every image matching the current date, search, and article scope. The gal
 starts with **UNIQUE IMAGES**; switch to **ARTICLE LINKS** to see every occurrence. Thumbnails
 load near the visible area and remain in a bounded memory cache. Single-click an
 image for its preview; double-click it or press Enter to see all linked articles in
-the table (or the exact occurrence in **ARTICLE LINKS** mode). The article dropdown lists recent entries; the adjacent field accepts an
+the table (or the exact occurrence in **ARTICLE LINKS** mode). Use **BACK TO GALLERY (ESC)**
+or press Escape to return to the same scroll position, selected image, and filters.
+Click **OPEN ORIGINAL ARTICLE** below the preview to open the selected image's source
+article in your browser. In the linked-articles table, the link follows the selected row.
+The article dropdown lists recent entries; the adjacent field accepts an
 image ID or full article hash anywhere in the archive. `Ctrl+F` focuses search,
-`F5` refreshes, and Escape clears search.
+`F5` refreshes, and Escape clears search when there is no image inspection to return from.
 
 For older archives that still contain inline image payloads, close the app and run
 `dotnet AllianceWatch.dll --dedupe-images` from the deployed app folder. This makes a

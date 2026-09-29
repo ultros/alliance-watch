@@ -37,6 +37,7 @@ internal static class AssessmentTests
         Test("Gallery readers never make monitor writes read-only", GalleryBrowserTests.VerifyGalleryReadsDoNotMakeMonitorReadOnly);
         Test("Shared image payloads and legacy migration", GalleryBrowserTests.VerifyImageDeduplication);
         Test("Database browser paging and global search", GalleryBrowserTests.VerifyBrowserPagingAndSearch);
+        Test("App closes after gallery use without waiting on stalled archives", GalleryBrowserTests.VerifyCloseAfterGallery);
         Test("All-field archive search includes old articles and compressed text", ArticleSearchTests.VerifyAllFieldsAndOldArticles);
         Test("Archives continuously drain with bounded concurrency", ArchiveWorkerTests.VerifyContinuousDrainAndConcurrency);
         Test("Article timeouts back off without stopping the archive queue", ArchiveWorkerTests.VerifyArticleTimeoutIsolation);

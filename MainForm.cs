@@ -8,6 +8,8 @@ internal sealed class MainForm : Form
     private readonly string _appDirectory;
     private readonly AppConfig _config;
     private readonly Storage _storage;
+    private readonly Icon? _applicationIcon;
+    private readonly Image? _brandImage;
     private readonly FeedMonitor _monitor;
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = 1000 };
     private readonly System.Windows.Forms.Timer _pollTimer = new();
@@ -72,6 +74,14 @@ internal sealed class MainForm : Form
         _config = config;
         _storage = storage;
         _monitor = new FeedMonitor(config, storage, Path.Combine(appDirectory, "alliance_watch.log"));
+        using (var iconStream = typeof(MainForm).Assembly.GetManifestResourceStream("AllianceWatch.Assets.AllianceWatch.ico"))
+            if (iconStream is not null) Icon = _applicationIcon = new Icon(iconStream);
+        using (var imageStream = typeof(MainForm).Assembly.GetManifestResourceStream("AllianceWatch.Assets.AllianceWatch.png"))
+            if (imageStream is not null)
+            {
+                using var source = Image.FromStream(imageStream);
+                _brandImage = new Bitmap(source);
+            }
 
         Text = "AllianceWatch // Strategic Indicator Network";
         BackColor = UiTheme.Void;
@@ -138,14 +148,13 @@ internal sealed class MainForm : Form
         // Reserve this space for the independently overlaid window controls.
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 244));
 
-        var mark = new Label
+        var mark = new PictureBox
         {
-            Text = "AW",
             Dock = DockStyle.Fill,
-            Font = new Font("Consolas", 22, FontStyle.Bold),
-            ForeColor = UiTheme.CyanHot,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.FromArgb(7, 40, 43)
+            Image = _brandImage,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            AccessibleName = "AllianceWatch application icon",
+            BackColor = Color.Transparent
         };
         layout.Controls.Add(mark, 0, 0);
 
@@ -1432,9 +1441,14 @@ internal sealed class MainForm : Form
             _pollTimer.Dispose();
             _archiveStatsTimer.Dispose();
             _shutdown.Dispose();
-            _monitor.Dispose();
+            _ = _monitor.StopAsync();
             _windowToolTip.Dispose();
         }
         base.Dispose(disposing);
+        if (disposing)
+        {
+            _applicationIcon?.Dispose();
+            _brandImage?.Dispose();
+        }
     }
 }

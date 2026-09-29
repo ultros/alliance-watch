@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.IO.Compression;
 using Microsoft.Data.Sqlite;
 
@@ -32,6 +33,7 @@ internal sealed class DatabaseBrowserForm : Form
     private readonly TextBox _imageManualEntry = new() { Width = 178, PlaceholderText = "Image ID or article hash", Visible = false };
     private readonly Button _galleryToggle = UiTheme.Button("GALLERY VIEW");
     private readonly Button _reloadGallery = UiTheme.Button("RELOAD GALLERY");
+    private readonly Button _backToGallery = UiTheme.Button("◀ BACK TO GALLERY (ESC)");
     private readonly Button _first = UiTheme.Button("FIRST");
     private readonly Button _previous = UiTheme.Button("◀ PREVIOUS");
     private readonly TextBox _pageEntry = new() { Width = 68, PlaceholderText = "PAGE", TextAlign = HorizontalAlignment.Center };
@@ -43,6 +45,12 @@ internal sealed class DatabaseBrowserForm : Form
     private readonly DataGridView _grid = new();
     private readonly VirtualImageGallery _gallery = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly PictureBox _preview = new() { Dock = DockStyle.Top, Height = 245, SizeMode = PictureBoxSizeMode.Zoom, BackColor = UiTheme.Void };
+    private readonly LinkLabel _articleLink = new()
+    {
+        Dock = DockStyle.Top, Height = 32, Text = "OPEN ORIGINAL ARTICLE", Enabled = false,
+        LinkColor = UiTheme.Cyan, ActiveLinkColor = UiTheme.CyanHot, VisitedLinkColor = UiTheme.Cyan,
+        TextAlign = ContentAlignment.MiddleLeft, AccessibleName = "Open original article in browser"
+    };
     private readonly TextBox _details = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, BackColor = UiTheme.Surface, ForeColor = UiTheme.Text, BorderStyle = BorderStyle.None, Font = UiTheme.Small };
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 280 };
 
@@ -51,7 +59,7 @@ internal sealed class DatabaseBrowserForm : Form
         new("ARTICLES", "FROM articles", "first_seen", SearchColumns: ["article_hash", "feed_name", "title", "url", "published", "summary"], OrderTieBreaker: "id DESC"),
         new("MATCHES / SIGNALS", "FROM matches m JOIN articles a ON a.article_hash=m.article_hash", "m.detected_at", SearchColumns: ["a.article_hash", "a.feed_name", "a.title", "a.url", "a.summary", "m.severity", "m.matched_phrases", "m.matched_actors"], OrderTieBreaker: "m.id DESC"),
         new("ARTICLE ARCHIVES", "FROM article_archives aa LEFT JOIN articles a ON a.article_hash=aa.article_hash", "aa.fetched_at", SelectColumns: "aa.article_hash,aa.final_url,aa.content_type,aa.html_bytes,aa.text_bytes,aa.compressed_bytes,aa.image_count,aa.fetch_status,aa.last_error,aa.attempts,aa.next_attempt_at,aa.fetched_at,a.feed_name,a.title,a.published", SearchColumns: ["aa.article_hash", "aa.final_url", "aa.content_type", "aa.fetch_status", "aa.last_error", "a.feed_name", "a.title"], OrderTieBreaker: "aa.article_hash DESC"),
-        new("ARCHIVED IMAGES", "FROM article_images i LEFT JOIN articles a ON a.article_hash=i.article_hash", "a.published", true, "i.id,i.article_hash,i.position,i.source_url,i.resolved_url,i.mime_type,i.alt_text,i.original_bytes,i.compressed_bytes,i.blob_hash,a.feed_name,a.title,a.published", ["i.article_hash", "i.source_url", "i.resolved_url", "i.mime_type", "i.alt_text", "a.feed_name", "a.title"]),
+        new("ARCHIVED IMAGES", "FROM article_images i LEFT JOIN articles a ON a.article_hash=i.article_hash", "a.published", true, "i.id,i.article_hash,i.position,i.source_url,i.resolved_url,i.mime_type,i.alt_text,i.original_bytes,i.compressed_bytes,i.blob_hash,a.feed_name,a.title,a.published,a.url AS article_url", ["i.article_hash", "i.source_url", "i.resolved_url", "i.mime_type", "i.alt_text", "a.feed_name", "a.title"]),
         new("NORMALIZED EVIDENCE", "FROM aw_events", "first_seen_at", SearchColumns: ["record_id", "event_id", "cluster_id", "canonical_url", "payload"], OrderTieBreaker: "record_id DESC"),
         new("ASSESSMENTS", "FROM aw_assessments", "timestamp", SearchColumns: ["version", "payload"], OrderTieBreaker: "id DESC"),
         new("SCORE HISTORY", "FROM aw_score_history", "timestamp", SearchColumns: ["payload"], OrderTieBreaker: "id DESC"),
@@ -84,6 +92,9 @@ internal sealed class DatabaseBrowserForm : Form
     private string? _manualArticleHash;
     private long? _manualImageId;
     private string? _manualBlobHash;
+    private GalleryReturnState? _galleryReturnState;
+    private bool _closing;
+    private bool BrowserClosing => _closing || Disposing || IsDisposed;
 
     public DatabaseBrowserForm(Storage storage, string? initialArticleHash = null)
     {
@@ -96,6 +107,7 @@ internal sealed class DatabaseBrowserForm : Form
         ForeColor = UiTheme.Text;
         Font = UiTheme.Small;
         KeyPreview = true;
+        _backToGallery.Visible = false;
 
         ConfigureGrid();
         _viewPicker.Items.AddRange(_views.Select(view => (object)view.Label).ToArray());
@@ -112,7 +124,7 @@ internal sealed class DatabaseBrowserForm : Form
         var copyRecord = UiTheme.Button("COPY RECORD");
         var toolbar = new WrappingToolbar { MinimumToolbarHeight = 76, Padding = new Padding(6, 5, 6, 3), BackColor = UiTheme.Void };
         toolbar.Controls.AddRange([
-            _viewPicker, Caption("SEARCH"), _search, Caption("FROM"), _from, Caption("TO"), _to,
+            _backToGallery, _viewPicker, Caption("SEARCH"), _search, Caption("FROM"), _from, Caption("TO"), _to,
             _imageSort, _imageGrouping, _imageArticlePicker, _imageManualEntry, _galleryToggle, _reloadGallery,
             refresh, _first, _previous, _pageEntry, _goToPage, _next, _last, _clearFilters, copyRecord
         ]);
@@ -123,6 +135,7 @@ internal sealed class DatabaseBrowserForm : Form
         split.Panel1.Controls.Add(_gallery);
         split.Panel2.Padding = new Padding(7);
         split.Panel2.Controls.Add(_details);
+        split.Panel2.Controls.Add(_articleLink);
         split.Panel2.Controls.Add(_preview);
         split.Panel2.Controls.Add(new Label { Dock = DockStyle.Top, Height = 28, Text = "SELECTED RECORD / IMAGE PREVIEW", ForeColor = UiTheme.Cyan, Font = UiTheme.Label, Padding = new Padding(3, 5, 3, 1) });
         Controls.Add(split);
@@ -138,11 +151,12 @@ internal sealed class DatabaseBrowserForm : Form
         _from.KeyUp += (_, _) => ReloadForFilterChange();
         _to.KeyUp += (_, _) => ReloadForFilterChange();
         _imageSort.SelectedIndexChanged += (_, _) => SortImages();
-        _imageGrouping.SelectedIndexChanged += (_, _) => { if (_galleryMode) RequestGalleryReload(); };
-        _imageArticlePicker.SelectedIndexChanged += (_, _) => { if (_imageArticlePicker.Visible && !_loadingImagePicker) RefreshImageScope(); };
+        _imageGrouping.SelectedIndexChanged += (_, _) => { if (_galleryMode && !_suppressFilterReload) RequestGalleryReload(); };
+        _imageArticlePicker.SelectedIndexChanged += (_, _) => { if (_imageArticlePicker.Visible && !_loadingImagePicker && !_suppressFilterReload) RefreshImageScope(); };
         _imageManualEntry.KeyDown += (_, eventArgs) => { if (eventArgs.KeyCode == Keys.Enter) { eventArgs.SuppressKeyPress = true; ApplyManualImageScope(); } };
         _galleryToggle.Click += (_, _) => SetGalleryMode(!_galleryMode);
         _reloadGallery.Click += (_, _) => RequestGalleryReload();
+        _backToGallery.Click += (_, _) => ReturnToGallery();
         refresh.Click += (_, _) => ReloadCurrent();
         _first.Click += (_, _) => { _offset = 0; LoadPage(); };
         _previous.Click += (_, _) => { _offset = Math.Max(0, _offset - PageSize); LoadPage(); };
@@ -152,7 +166,9 @@ internal sealed class DatabaseBrowserForm : Form
         _last.Click += (_, _) => { _offset = LastPageOffset; LoadPage(); };
         _clearFilters.Click += (_, _) => ClearFilters();
         copyRecord.Click += (_, _) => CopyRecord();
-        _grid.SelectionChanged += (_, _) => ShowSelection();
+        _articleLink.LinkClicked += (_, _) => OpenOriginalArticle();
+        // SelectionChanged can run before CurrentRow switches to the new row.
+        _grid.CurrentCellChanged += (_, _) => ShowSelection();
         _gallery.ItemSelected += ShowGallerySelection;
         _gallery.ItemActivated += OpenGalleryImageInTable;
         _gallery.ViewportChanged += QueueVisibleThumbnailLoad;
@@ -195,6 +211,8 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void ResetForView()
     {
+        _galleryReturnState = null;
+        _backToGallery.Visible = false;
         _offset = 0;
         _manualArticleHash = null;
         _manualImageId = null;
@@ -228,7 +246,7 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void LoadPage()
     {
-        if (!IsHandleCreated || _viewPicker.SelectedIndex < 0) return;
+        if (_closing || !IsHandleCreated || _viewPicker.SelectedIndex < 0) return;
         try
         {
             var view = CurrentView;
@@ -251,11 +269,13 @@ internal sealed class DatabaseBrowserForm : Form
             UpdateViewControls(view);
             _details.Text = result.Rows.Count == 0 ? "No records match the current scope." : "Select a row to inspect its fields.";
             SetTableStatus(view, result.Rows.Count);
+            ShowSelection();
         }
         catch (Exception ex)
         {
             _table = null;
             _grid.DataSource = null;
+            SetArticleLink(null);
             _status.Text = "DATABASE BROWSER FAILED // " + ex.Message;
         }
     }
@@ -396,6 +416,7 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void SortImages()
     {
+        if (_suppressFilterReload) return;
         if (!CurrentView.HasImages || _imageSort.SelectedIndex < 0) return;
         if (_galleryMode)
         {
@@ -510,20 +531,68 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void SetGalleryMode(bool enabled)
     {
+        if (enabled && _galleryReturnState is not null)
+        {
+            ReturnToGallery();
+            return;
+        }
+        UpdateGalleryMode(enabled);
+        if (enabled) RequestGalleryReload();
+        else
+        {
+            _galleryCancellation?.Cancel();
+            _galleryReloadQueued = false;
+            _thumbnailReloadPending = false;
+            ClearPreview();
+            LoadPage();
+        }
+    }
+
+    private void UpdateGalleryMode(bool enabled)
+    {
         _galleryMode = enabled;
         _imageGrouping.Visible = enabled;
         _gallery.Visible = enabled;
         _grid.Visible = !enabled;
         _galleryToggle.Text = enabled ? "TABLE VIEW" : "GALLERY VIEW";
         _reloadGallery.Visible = enabled;
-        if (enabled) RequestGalleryReload();
-        else
+        _backToGallery.Visible = !enabled && _galleryReturnState is not null;
+    }
+
+    private void ReturnToGallery()
+    {
+        if (_galleryReturnState is not { } state) return;
+        _searchTimer.Stop();
+        _suppressFilterReload = true;
+        try
         {
-            _galleryCancellation?.Cancel();
-            _thumbnailReloadPending = false;
-            ClearPreview();
-            LoadPage();
+            _search.Text = state.Search;
+            _from.Value = state.From;
+            _from.Checked = state.FromChecked;
+            _to.Value = state.To;
+            _to.Checked = state.ToChecked;
+            _imageSort.SelectedIndex = state.Sort;
+            _imageGrouping.SelectedIndex = state.Grouping;
+            _imageArticlePicker.SelectedIndex = state.ArticleIndex;
+            _imageManualEntry.Text = state.ManualEntry;
+            _manualArticleHash = state.ArticleHash;
+            _manualImageId = state.ImageId;
+            _manualBlobHash = state.BlobHash;
+            _offset = state.Offset;
         }
+        finally { _suppressFilterReload = false; }
+
+        _galleryReturnState = null;
+        // Keep the existing cards, selection, and thumbnails instead of resetting
+        // them with SetItems. A fresh token resumes any canceled thumbnail work.
+        _galleryCancellation?.Dispose();
+        _galleryCancellation = new CancellationTokenSource();
+        UpdateGalleryMode(true);
+        _gallery.Focus();
+        _gallery.AutoScrollPosition = new Point(-state.Scroll.X, -state.Scroll.Y);
+        _status.Text = state.Status;
+        ShowGallerySelection(state.Image);
+        QueueVisibleThumbnailLoad();
     }
 
     private void RequestGalleryReload()
@@ -540,7 +609,7 @@ internal sealed class DatabaseBrowserForm : Form
 
     private async Task LoadGalleryAsync()
     {
-        if (!_galleryMode || !CurrentView.HasImages || IsDisposed) return;
+        if (!_galleryMode || !CurrentView.HasImages || BrowserClosing) return;
         _galleryLoading = true;
         _galleryReloadQueued = false;
         _galleryCancellation?.Dispose();
@@ -552,23 +621,23 @@ internal sealed class DatabaseBrowserForm : Form
         {
             var query = CaptureGalleryQuery();
             var images = await Task.Run(() => ReadGalleryMetadata(query, cancellation), cancellation);
-            if (IsDisposed || cancellation.IsCancellationRequested) return;
+            if (BrowserClosing || cancellation.IsCancellationRequested) return;
             _gallery.SetItems(images);
             var scope = string.IsNullOrWhiteSpace(query.ArticleHash) ? "ALL ARCHIVES" : "ARTICLE SCOPE";
             _status.Text = $"GALLERY // {images.Count:N0} {(_imageGrouping.SelectedIndex == 0 ? "UNIQUE IMAGES" : "ARTICLE LINKS")} IN {scope} // VIRTUAL SCROLL ACTIVE // {ImageSortLabel()}";
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { _status.Text = "GALLERY LOAD FAILED // " + ex.Message; }
+        catch (Exception ex) { if (!BrowserClosing) _status.Text = "GALLERY LOAD FAILED // " + ex.Message; }
         finally
         {
             _galleryLoading = false;
-            if (!IsDisposed) _reloadGallery.Enabled = true;
-            if (_galleryReloadQueued && !IsDisposed)
+            if (!BrowserClosing) _reloadGallery.Enabled = true;
+            if (_galleryReloadQueued && !BrowserClosing)
             {
                 _galleryReloadQueued = false;
                 _ = LoadGalleryAsync();
             }
-            else if (!IsDisposed)
+            else if (!BrowserClosing)
             {
                 QueueVisibleThumbnailLoad();
             }
@@ -601,7 +670,7 @@ internal sealed class DatabaseBrowserForm : Form
             where.Add("(" + string.Join(" OR ", query.SearchColumns.Select(column => $"instr(lower(COALESCE(CAST({column} AS TEXT),'')), lower($search)) > 0")) + ")");
             command.Parameters.AddWithValue("$search", query.Search);
         }
-        command.CommandText = $"SELECT i.id,i.article_hash,i.position,i.mime_type,i.alt_text,i.original_bytes,i.compressed_bytes,a.title,i.blob_hash FROM article_images i LEFT JOIN articles a ON a.article_hash=i.article_hash{WhereClause(where)}{query.Order}";
+        command.CommandText = $"SELECT i.id,i.article_hash,i.position,i.mime_type,i.alt_text,i.original_bytes,i.compressed_bytes,a.title,i.blob_hash,a.url FROM article_images i LEFT JOIN articles a ON a.article_hash=i.article_hash{WhereClause(where)}{query.Order}";
         using var reader = command.ExecuteReader();
         var images = new List<GalleryImageInfo>();
         var unique = query.UniqueImages ? new Dictionary<string, int>(StringComparer.Ordinal) : null;
@@ -617,7 +686,8 @@ internal sealed class DatabaseBrowserForm : Form
             if (unique is not null && hash is not null) unique[hash] = images.Count;
             images.Add(new GalleryImageInfo(
                 reader.GetInt64(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3), reader.GetString(4),
-                reader.GetInt32(5), reader.GetInt32(6), reader.IsDBNull(7) ? "UNTITLED" : reader.GetString(7), hash));
+                reader.GetInt32(5), reader.GetInt32(6), reader.IsDBNull(7) ? "UNTITLED" : reader.GetString(7), hash,
+                ArticleUrl: reader.IsDBNull(9) ? null : reader.GetString(9)));
         }
         return images;
     }
@@ -626,7 +696,7 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void QueueVisibleThumbnailLoad()
     {
-        if (!_galleryMode || _galleryLoading || IsDisposed) return;
+        if (!_galleryMode || _galleryLoading || BrowserClosing) return;
         // A debounced WinForms timer can be postponed indefinitely by wheel or
         // scrollbar events. Keep one batch in flight and coalesce later scrolls.
         if (_thumbnailLoading)
@@ -639,7 +709,7 @@ internal sealed class DatabaseBrowserForm : Form
 
     private async Task LoadVisibleThumbnailsAsync()
     {
-        if (!_galleryMode || _thumbnailLoading || _galleryLoading || IsDisposed) return;
+        if (!_galleryMode || _thumbnailLoading || _galleryLoading || BrowserClosing) return;
         var images = _gallery.VisibleItems(2).Where(image => _gallery.NeedsThumbnail(image.Id)).Take(ThumbnailBatchSize).ToArray();
         if (images.Length == 0) return;
         _thumbnailLoading = true;
@@ -648,7 +718,7 @@ internal sealed class DatabaseBrowserForm : Form
         try
         {
             var thumbnails = await Task.Run(() => ReadThumbnails(images, cancellation), cancellation);
-            if (IsDisposed || cancellation.IsCancellationRequested)
+            if (BrowserClosing || cancellation.IsCancellationRequested)
             {
                 foreach (var (_, image) in thumbnails) image?.Dispose();
                 scheduleNextBatch = true;
@@ -658,14 +728,14 @@ internal sealed class DatabaseBrowserForm : Form
             scheduleNextBatch = true;
         }
         catch (OperationCanceledException) { scheduleNextBatch = true; }
-        catch (Exception ex) { _status.Text = "THUMBNAIL LOAD FAILED // " + ex.Message; }
+        catch (Exception ex) { if (!BrowserClosing) _status.Text = "THUMBNAIL LOAD FAILED // " + ex.Message; }
         finally
         {
             _thumbnailLoading = false;
             var reload = _thumbnailReloadPending || scheduleNextBatch &&
                 _gallery.VisibleItems(2).Any(image => _gallery.NeedsThumbnail(image.Id));
             _thumbnailReloadPending = false;
-            if (reload && !IsDisposed && _galleryMode && !_galleryLoading)
+            if (reload && !BrowserClosing && _galleryMode && !_galleryLoading)
                 QueueVisibleThumbnailLoad();
         }
     }
@@ -700,6 +770,8 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void ShowGallerySelection(GalleryImageInfo image)
     {
+        if (_closing) return;
+        SetArticleLink(image.ArticleUrl);
         _details.Text = string.Join(Environment.NewLine,
         [
             $"id: {image.Id}", $"article_hash: {image.ArticleHash}", $"position: {image.Position}", $"mime_type: {image.MimeType}",
@@ -712,6 +784,13 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void OpenGalleryImageInTable(GalleryImageInfo image)
     {
+        if (!_galleryMode) return;
+        _galleryReturnState = new GalleryReturnState(
+            _search.Text, _from.Value, _from.Checked, _to.Value, _to.Checked,
+            _imageSort.SelectedIndex, _imageGrouping.SelectedIndex, _imageArticlePicker.SelectedIndex,
+            _imageManualEntry.Text, _manualArticleHash, _manualImageId, _manualBlobHash,
+            _offset, _gallery.AutoScrollPosition, _status.Text, image);
+        _searchTimer.Stop();
         _imageManualEntry.Clear();
         var allLinks = _imageGrouping.SelectedIndex == 0 && image.BlobHash is not null;
         if (allLinks)
@@ -750,7 +829,14 @@ internal sealed class DatabaseBrowserForm : Form
 
     private void ShowSelection()
     {
-        if (_grid.CurrentRow?.DataBoundItem is not DataRowView row) return;
+        if (_closing || _galleryMode) return;
+        if (_grid.CurrentRow?.DataBoundItem is not DataRowView row)
+        {
+            SetArticleLink(null);
+            return;
+        }
+        var urlColumn = row.Row.Table.Columns.Contains("article_url") ? "article_url" : "url";
+        SetArticleLink(row.Row.Table.Columns.Contains(urlColumn) ? row.Row[urlColumn]?.ToString() : null);
         _details.Text = string.Join(Environment.NewLine, row.Row.Table.Columns.Cast<DataColumn>()
             .Select(column => $"{column.ColumnName}: {Display(row.Row[column])}"));
         if (CurrentView.HasImages && row.Row.Table.Columns.Contains("id") && long.TryParse(row.Row["id"]?.ToString(), out var id))
@@ -761,8 +847,25 @@ internal sealed class DatabaseBrowserForm : Form
 
     private static string Display(object value) => value == DBNull.Value ? "—" : value.ToString() ?? "";
 
+    private void SetArticleLink(string? url)
+    {
+        var valid = Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+        _articleLink.Tag = valid ? uri : null;
+        _articleLink.Enabled = valid;
+        _articleLink.AccessibleDescription = valid ? uri!.AbsoluteUri : "No original article URL available";
+    }
+
+    private void OpenOriginalArticle()
+    {
+        if (_articleLink.Tag is not Uri uri) return;
+        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Exception ex) { _status.Text = "OPEN ARTICLE FAILED // " + ex.Message; }
+    }
+
     private async Task LoadImageAsync(long id)
     {
+        if (_closing) return;
         _previewCancellation?.Cancel();
         _previewCancellation?.Dispose();
         _previewCancellation = new CancellationTokenSource();
@@ -771,13 +874,13 @@ internal sealed class DatabaseBrowserForm : Form
         try
         {
             var image = await Task.Run(() => ReadPreview(id, cancellation), cancellation);
-            if (IsDisposed || cancellation.IsCancellationRequested) { image?.Dispose(); return; }
+            if (BrowserClosing || cancellation.IsCancellationRequested) { image?.Dispose(); return; }
             _preview.Image = image;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _details.Text += Environment.NewLine + Environment.NewLine + "PREVIEW UNAVAILABLE: " + ex.Message;
+            if (!BrowserClosing) _details.Text += Environment.NewLine + Environment.NewLine + "PREVIEW UNAVAILABLE: " + ex.Message;
         }
     }
 
@@ -855,6 +958,16 @@ internal sealed class DatabaseBrowserForm : Form
         }
     }
 
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Escape && _galleryReturnState is not null)
+        {
+            ReturnToGallery();
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
     private void ClearPreview()
     {
         _preview.Image?.Dispose();
@@ -863,17 +976,27 @@ internal sealed class DatabaseBrowserForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
+        if (disposing && !_closing)
         {
+            _closing = true;
+            _galleryMode = false;
+            _galleryReloadQueued = false;
+            _thumbnailReloadPending = false;
             _searchTimer.Dispose();
             _galleryCancellation?.Cancel();
             _galleryCancellation?.Dispose();
+            _galleryCancellation = null;
             _previewCancellation?.Cancel();
             _previewCancellation?.Dispose();
+            _previewCancellation = null;
             ClearPreview();
         }
         base.Dispose(disposing);
     }
 
     private sealed record GalleryQuery(string ArticleHash, long? ImageId, string? BlobHash, string? From, string? To, string Search, string[] SearchColumns, string Order, bool UniqueImages);
+    private sealed record GalleryReturnState(
+        string Search, DateTime From, bool FromChecked, DateTime To, bool ToChecked,
+        int Sort, int Grouping, int ArticleIndex, string ManualEntry, string? ArticleHash,
+        long? ImageId, string? BlobHash, int Offset, Point Scroll, string Status, GalleryImageInfo Image);
 }

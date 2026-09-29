@@ -221,6 +221,7 @@ internal static class UiToolTips
 
     private static string Describe(Control control)
     {
+        if (control is LinkLabel && control.Text == "OPEN ORIGINAL ARTICLE") return "OPEN ORIGINAL ARTICLE\n\nOpens the selected image's original article in your default web browser. For images shared by several articles, double-click the image and select an article row to open that source.";
         if (control.Tag as string == "metric-detail") return string.Empty; // MapForm supplies row-specific definitions.
         if (control is TelemetryPanel panel) return PanelHelp(panel.Caption);
         if (control is ThreatMeter) return "GLOBAL INDICATOR LEVEL\n\nThe 0–100 readout is a descriptive internal index derived from configured, qualified public-report evidence. It is not a probability, prediction, intelligence estimate, or declaration that conflict will occur. Click it to open the full Assessment Console.";
@@ -318,6 +319,7 @@ internal static class UiToolTips
             "REFRESH MAP" => "REFRESH MAP\n\nReloads current assessment, evidence, and actionable alerts for the map view without starting a new network collection cycle.",
             "GALLERY VIEW" => "GALLERY VIEW\n\nSwitches archived images to the virtual gallery. It contains every matching local image in a single scroll range while retaining only nearby thumbnails in memory. No image is downloaded from the internet.",
             "TABLE VIEW" => "TABLE VIEW\n\nReturns archived images to the sortable, paged table view while retaining the current local filters.",
+            "◀ BACK TO GALLERY (ESC)" => "BACK TO GALLERY\n\nReturns to the gallery at the saved scroll position with the same selected image, filters, and sort order. Escape also returns while inspecting an image's article links.",
             "RELOAD GALLERY" => "RELOAD GALLERY\n\nRe-queries the complete matching local image metadata set with the current date, search, article scope, and sort settings. It cancels stale thumbnail work safely and does not download anything.",
             "REFRESH" => "REFRESH\n\nReloads the current local view using the active filters. It does not start a source scan or modify data.",
             "COPY RECORD" => "COPY RECORD\n\nCopies the selected record’s displayed raw fields to the clipboard for analysis or documentation. The database remains unchanged.",

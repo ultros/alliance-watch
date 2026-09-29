@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AllianceWatch.ico</ApplicationIcon>
     <AssemblyName>AllianceWatch</AssemblyName>
     <RootNamespace>AllianceWatch</RootNamespace>
   </PropertyGroup>
@@ -16,6 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Assets\AllianceWatch.ico" />
+    <EmbeddedResource Include="Assets\AllianceWatch.png" />
     <None Update="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

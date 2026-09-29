@@ -10,7 +10,8 @@ internal sealed record GalleryImageInfo(
     int CompressedBytes,
     string Title,
     string? BlobHash = null,
-    int LinkCount = 1);
+    int LinkCount = 1,
+    string? ArticleUrl = null);
 
 // A painted, virtualized gallery keeps the browser responsive even when the archive
 // contains tens of thousands of images. Metadata is retained, but only nearby
@@ -157,7 +158,16 @@ internal sealed class VirtualImageGallery : ScrollableControl
         Focus();
         var index = IndexAt(e.Location);
         if (index < 0) return;
-        SetSelectedIndex(index, activate: e.Clicks >= 2);
+        SetSelectedIndex(index, activate: false);
+    }
+
+    protected override void OnMouseDoubleClick(MouseEventArgs e)
+    {
+        base.OnMouseDoubleClick(e);
+        if (e.Button != MouseButtons.Left) return;
+        Focus();
+        var index = IndexAt(e.Location);
+        if (index >= 0) SetSelectedIndex(index, activate: true);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

@@ -173,6 +173,10 @@ internal static class GalleryBrowserTests
 
             var viewPicker = Field<ComboBox>(form, "_viewPicker");
             viewPicker.SelectedIndex = 3; // ARCHIVED IMAGES
+            search.Text = "Archive browser record";
+            var from = Field<DateTimePicker>(form, "_from");
+            from.Value = DateTime.UtcNow.AddDays(-1);
+            from.Checked = true;
             Invoke(form, "SetGalleryMode", true);
             var gallery = Field<VirtualImageGallery>(form, "_gallery");
             var timeout = System.Diagnostics.Stopwatch.StartNew();
@@ -182,9 +186,26 @@ internal static class GalleryBrowserTests
                 Thread.Sleep(5);
             }
             Assert(gallery.ItemCount == 1, "Unique gallery should collapse identical payloads across articles.");
+            Invoke(form, "ShowGallerySelection", gallery.VisibleItems().First());
+            var articleLink = Field<LinkLabel>(form, "_articleLink");
+            Assert(articleLink.Enabled && articleLink.Tag is Uri galleryUrl &&
+                galleryUrl.AbsoluteUri == "https://example.invalid/511",
+                "Gallery selection must link to the original article, not its image URL.");
             Invoke(form, "OpenGalleryImageInTable", gallery.VisibleItems().First());
             Assert(Field<Label>(form, "_status").Text.Contains("OF 513"),
                 "Opening one unique image must reveal all 513 article-image links in the paged table.");
+            grid.CurrentCell = grid.Rows[2].Cells[0];
+            Assert(articleLink.Tag is Uri rowUrl && rowUrl.AbsoluteUri == grid.Rows[2].Cells["article_url"].Value?.ToString(),
+                "Selecting a different article link must update the clickable original article.");
+            Assert(search.Text == "" && !from.Checked, "Unique-image inspection should show links outside the gallery filters.");
+            var back = Field<Button>(form, "_backToGallery");
+            typeof(Button).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(back, [EventArgs.Empty]);
+            Assert((bool)Value(form, "_galleryMode")! && gallery.ItemCount == 1,
+                "The Back button must return to the existing unique-image gallery.");
+            Assert(search.Text == "Archive browser record" && from.Checked,
+                "Back must restore the search and date filters removed during image inspection.");
+            Assert(Value(form, "_manualBlobHash") is null && Value(form, "_galleryReturnState") is null,
+                "Back must clear the temporary image scope and consume its navigation state.");
             Invoke(form, "ClearFilters");
             Invoke(form, "SetGalleryMode", true);
             var grouping = Field<ComboBox>(form, "_imageGrouping");
@@ -239,9 +260,87 @@ internal static class GalleryBrowserTests
             Invoke(form, "OpenGalleryImageInTable", multiImageArticle);
             Assert(grid.Rows.Count == 1 && Convert.ToInt64(grid.Rows[0].Cells["id"].Value) == multiImageArticle!.Id,
                 "Opening a gallery card must select its exact image, rather than every image in its article.");
+            Invoke(form, "ReturnToGallery");
+            // Exercise the actual double-click event, then route Escape through
+            // the form command handler used even when a grid or textbox has focus.
+            var doubleClick = typeof(VirtualImageGallery).GetMethod("OnMouseDoubleClick", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var scrollBeforeOpen = gallery.AutoScrollPosition;
+            var cachedBeforeOpen = gallery.CachedThumbnailCount;
+            doubleClick.Invoke(gallery, [new MouseEventArgs(MouseButtons.Left, 2, 30, 230, 0)]);
+            var selectedId = gallery.SelectedItem?.Id;
+            Assert(selectedId is not null && !(bool)Value(form, "_galleryMode")!,
+                "Double-clicking a card must open its image details.");
+            var savedScroll = gallery.AutoScrollPosition;
+            search.Text = "changed while inspecting";
+            var keyArguments = new object?[] { new Message(), Keys.Escape };
+            var handled = typeof(DatabaseBrowserForm).GetMethod("ProcessCmdKey", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(form, keyArguments);
+            Assert(handled is true && (bool)Value(form, "_galleryMode")!, "Escape must return from image details to the gallery.");
+            Application.DoEvents();
+            Assert(gallery.ItemCount == 513 && gallery.SelectedItem?.Id == selectedId,
+                "Escape must preserve the full gallery and selected card.");
+            Assert(gallery.AutoScrollPosition == savedScroll && savedScroll.Y < 0,
+                $"Escape must preserve the scrolled gallery position. Before={scrollBeforeOpen}, expected={savedScroll}, actual={gallery.AutoScrollPosition}");
+            Assert(gallery.CachedThumbnailCount >= cachedBeforeOpen && search.Text == "",
+                "Returning must retain thumbnails and restore the original filters without a pending search reload.");
+            Assert(articleLink.Tag is Uri returnedUrl && returnedUrl.AbsoluteUri == gallery.SelectedItem!.ArticleUrl,
+                "Returning to the gallery must restore the selected image's article link.");
+            Invoke(form, "OpenGalleryImageInTable", gallery.SelectedItem!);
+            viewPicker.SelectedIndex = 0;
+            Assert(Value(form, "_galleryReturnState") is null,
+                "Switching datasets must discard the image return destination.");
+            Invoke(form, "SetArticleLink", "file:///C:/test.exe");
+            Assert(!articleLink.Enabled && articleLink.Tag is null, "Non-web article URLs must not be launchable.");
+            search.Text = "no matching article";
+            Invoke(form, "LoadPage");
+            Assert(!articleLink.Enabled && articleLink.Tag is null, "An empty result must not retain a stale article link.");
         }
         finally
         {
+            SqliteConnection.ClearAllPools();
+            foreach (var suffix in new[] { "", "-wal", "-shm" }) if (File.Exists(path + suffix)) File.Delete(path + suffix);
+        }
+    }
+
+    public static void VerifyCloseAfterGallery()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "aw-gallery-close-" + Guid.NewGuid() + ".db");
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Bound the regression test: the old synchronous Dispose blocks until this fires.
+        using var fallback = new System.Threading.Timer(_ => release.TrySetResult(), null, Timeout.Infinite, Timeout.Infinite);
+        Task? stopped = null;
+        try
+        {
+            var storage = new Storage(path);
+            storage.Initialize();
+            storage.MigrateAssessment();
+            using var main = new MainForm(Directory.GetCurrentDirectory(), new AppConfig(), storage, true);
+            _ = main.Handle;
+            var monitor = (FeedMonitor)typeof(MainForm).GetField("_monitor", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main)!;
+            typeof(FeedMonitor).GetField("_archiveWork", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(monitor, release.Task);
+            using var browser = new DatabaseBrowserForm(storage) { Owner = main };
+            _ = browser.Handle;
+            Field<ComboBox>(browser, "_viewPicker").SelectedIndex = 3;
+            Invoke(browser, "SetGalleryMode", true);
+            // Close with gallery metadata work still pending, then close the app
+            // while an archive operation has not yet acknowledged cancellation.
+            browser.Close();
+            browser.Dispose();
+            fallback.Change(3000, Timeout.Infinite);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            main.Close();
+            Assert(main.IsDisposed && watch.Elapsed < TimeSpan.FromSeconds(1),
+                "Exiting after gallery use must not block the UI waiting for the archive worker.");
+            stopped = monitor.StopAsync();
+            Assert(!stopped.IsCompleted, "Window closing must return before stalled archive cleanup completes.");
+            release.TrySetResult();
+            Assert(stopped.Wait(TimeSpan.FromSeconds(5)), "Archive resources must finish cleanup when pending work stops.");
+            Application.DoEvents();
+        }
+        finally
+        {
+            release.TrySetResult();
+            stopped?.Wait(TimeSpan.FromSeconds(5));
             SqliteConnection.ClearAllPools();
             foreach (var suffix in new[] { "", "-wal", "-shm" }) if (File.Exists(path + suffix)) File.Delete(path + suffix);
         }

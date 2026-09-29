@@ -16,6 +16,7 @@ internal sealed partial class FeedMonitor : IDisposable
     private readonly object _archiveLock = new();
     private readonly CancellationTokenSource _archiveShutdown = new();
     private Task _archiveWork = Task.CompletedTask;
+    private Task? _stopWork;
     private bool _disposed;
     private long _archiveRevision;
     internal long ArchiveRevision => Interlocked.Read(ref _archiveRevision);
@@ -405,25 +406,34 @@ internal sealed partial class FeedMonitor : IDisposable
         }
     }
 
-    public void Dispose()
+    // Forms must not synchronously wait on network or SQLite work during closing.
+    // Keep resources alive until the worker exits, with one shared cleanup task.
+    public Task StopAsync()
     {
-        Task work;
         lock (_archiveLock)
         {
-            if (_disposed) return;
+            if (_stopWork is not null) return _stopWork;
             _disposed = true;
-            _archiveShutdown.Cancel();
-            work = _archiveWork;
-        }
-        // The worker runs on the thread pool, so waiting here does not require
-        // the UI context and prevents writes after the monitor has been closed.
-        try { work.GetAwaiter().GetResult(); }
-        finally
-        {
-            _client.Dispose();
-            _archiveShutdown.Dispose();
+            var work = _archiveWork;
+            return _stopWork = Task.Run(async () =>
+            {
+                try
+                {
+                    _archiveShutdown.Cancel();
+                    await work.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { Log("ERROR", "Archive shutdown: " + ex.Message); }
+                finally
+                {
+                    _client.Dispose();
+                    _archiveShutdown.Dispose();
+                }
+            });
         }
     }
+
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
 
     private sealed record ImageCandidate(string SourceUrl, Uri ResolvedUrl, string AltText);
