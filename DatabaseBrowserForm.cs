@@ -91,7 +91,7 @@ internal sealed class DatabaseBrowserForm : Form
     private bool _loadingImagePicker;
     private string? _manualArticleHash;
     private long? _manualImageId;
-    private string? _manualBlobHash;
+    private long? _manualSharedImageId;
     private GalleryReturnState? _galleryReturnState;
     private bool _closing;
     private bool BrowserClosing => _closing || Disposing || IsDisposed;
@@ -216,7 +216,7 @@ internal sealed class DatabaseBrowserForm : Form
         _offset = 0;
         _manualArticleHash = null;
         _manualImageId = null;
-        _manualBlobHash = null;
+        _manualSharedImageId = null;
         _imageManualEntry.Clear();
         ClearPreview();
         if (_galleryMode && !CurrentView.HasImages) SetGalleryMode(false);
@@ -317,10 +317,10 @@ internal sealed class DatabaseBrowserForm : Form
             where.Add("i.id = $imageId");
             command.Parameters.AddWithValue("$imageId", imageId);
         }
-        if (view.HasImages && !string.IsNullOrWhiteSpace(_manualBlobHash))
+        if (view.HasImages && _manualSharedImageId is long sharedImageId)
         {
-            where.Add("i.blob_hash = $blobHash");
-            command.Parameters.AddWithValue("$blobHash", _manualBlobHash);
+            where.Add("(i.id=$sharedImageId OR i.blob_hash=(SELECT blob_hash FROM article_images WHERE id=$sharedImageId))");
+            command.Parameters.AddWithValue("$sharedImageId", sharedImageId);
         }
         var search = _search.Text.Trim();
         if (!string.IsNullOrWhiteSpace(search) && view.SearchColumns is { Length: > 0 })
@@ -352,7 +352,7 @@ internal sealed class DatabaseBrowserForm : Form
         var first = _totalRows == 0 ? 0 : _offset + 1;
         var last = _totalRows == 0 ? 0 : _offset + rowsOnPage;
         var filtered = string.IsNullOrWhiteSpace(_search.Text) && !_from.Checked && !_to.Checked &&
-            string.IsNullOrWhiteSpace(CurrentImageHash) && _manualImageId is null && _manualBlobHash is null ? "" : " // FILTERED";
+            string.IsNullOrWhiteSpace(CurrentImageHash) && _manualImageId is null && _manualSharedImageId is null ? "" : " // FILTERED";
         _status.Text = $"READ-ONLY VIEW // {view.Label} // ROWS {first:N0}–{last:N0} OF {_totalRows:N0} // PAGE {CurrentPage:N0}/{TotalPages:N0}{filtered}";
         _pageEntry.Text = CurrentPage.ToString();
         _first.Enabled = _previous.Enabled = _offset > 0;
@@ -400,7 +400,7 @@ internal sealed class DatabaseBrowserForm : Form
             _to.Checked = false;
             _manualArticleHash = null;
             _manualImageId = null;
-            _manualBlobHash = null;
+            _manualSharedImageId = null;
             _imageManualEntry.Clear();
             _loadingImagePicker = true;
             if (_imageArticlePicker.Items.Count > 0) _imageArticlePicker.SelectedIndex = 0;
@@ -490,7 +490,7 @@ internal sealed class DatabaseBrowserForm : Form
     {
         _manualArticleHash = null;
         _manualImageId = null;
-        _manualBlobHash = null;
+        _manualSharedImageId = null;
         _imageManualEntry.Clear();
         _offset = 0;
         ReloadCurrent();
@@ -503,7 +503,7 @@ internal sealed class DatabaseBrowserForm : Form
         {
             _manualArticleHash = null;
             _manualImageId = null;
-            _manualBlobHash = null;
+            _manualSharedImageId = null;
             ReloadCurrent();
             return;
         }
@@ -522,7 +522,7 @@ internal sealed class DatabaseBrowserForm : Form
             }
             _manualArticleHash = hash;
             _manualImageId = long.TryParse(value, out var selectedId) ? selectedId : null;
-            _manualBlobHash = null;
+            _manualSharedImageId = null;
             _offset = 0;
             ReloadCurrent();
         }
@@ -577,7 +577,7 @@ internal sealed class DatabaseBrowserForm : Form
             _imageManualEntry.Text = state.ManualEntry;
             _manualArticleHash = state.ArticleHash;
             _manualImageId = state.ImageId;
-            _manualBlobHash = state.BlobHash;
+            _manualSharedImageId = state.SharedImageId;
             _offset = state.Offset;
         }
         finally { _suppressFilterReload = false; }
@@ -647,7 +647,7 @@ internal sealed class DatabaseBrowserForm : Form
     private GalleryQuery CaptureGalleryQuery() => new(
         CurrentImageHash,
         _manualImageId,
-        _manualBlobHash,
+        _manualSharedImageId,
         _from.Checked ? AsUtcText(_from.Value) : null,
         _to.Checked ? AsUtcText(_to.Value) : null,
         _search.Text.Trim(),
@@ -662,7 +662,11 @@ internal sealed class DatabaseBrowserForm : Form
         var where = new List<string>();
         if (!string.IsNullOrEmpty(query.ArticleHash)) { where.Add("i.article_hash=$hash"); command.Parameters.AddWithValue("$hash", query.ArticleHash); }
         if (query.ImageId is long imageId) { where.Add("i.id=$imageId"); command.Parameters.AddWithValue("$imageId", imageId); }
-        if (!string.IsNullOrWhiteSpace(query.BlobHash)) { where.Add("i.blob_hash=$blobHash"); command.Parameters.AddWithValue("$blobHash", query.BlobHash); }
+        if (query.SharedImageId is long sharedImageId)
+        {
+            where.Add("(i.id=$sharedImageId OR i.blob_hash=(SELECT blob_hash FROM article_images WHERE id=$sharedImageId))");
+            command.Parameters.AddWithValue("$sharedImageId", sharedImageId);
+        }
         if (query.From is not null) { where.Add("a.published >= $from"); command.Parameters.AddWithValue("$from", query.From); }
         if (query.To is not null) { where.Add("a.published <= $to"); command.Parameters.AddWithValue("$to", query.To); }
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -788,11 +792,11 @@ internal sealed class DatabaseBrowserForm : Form
         _galleryReturnState = new GalleryReturnState(
             _search.Text, _from.Value, _from.Checked, _to.Value, _to.Checked,
             _imageSort.SelectedIndex, _imageGrouping.SelectedIndex, _imageArticlePicker.SelectedIndex,
-            _imageManualEntry.Text, _manualArticleHash, _manualImageId, _manualBlobHash,
+            _imageManualEntry.Text, _manualArticleHash, _manualImageId, _manualSharedImageId,
             _offset, _gallery.AutoScrollPosition, _status.Text, image);
         _searchTimer.Stop();
         _imageManualEntry.Clear();
-        var allLinks = _imageGrouping.SelectedIndex == 0 && image.BlobHash is not null;
+        var allLinks = _imageGrouping.SelectedIndex == 0;
         if (allLinks)
         {
             _searchTimer.Stop();
@@ -807,7 +811,9 @@ internal sealed class DatabaseBrowserForm : Form
         }
         _manualArticleHash = allLinks ? "" : image.ArticleHash;
         _manualImageId = allLinks ? null : image.Id;
-        _manualBlobHash = allLinks ? image.BlobHash : null;
+        // Resolve the shared payload through the stable article-image ID in SQL.
+        // Background migration may have changed its hash since this card loaded.
+        _manualSharedImageId = allLinks ? image.Id : null;
         _offset = 0;
         SetGalleryMode(false);
     }
@@ -994,9 +1000,9 @@ internal sealed class DatabaseBrowserForm : Form
         base.Dispose(disposing);
     }
 
-    private sealed record GalleryQuery(string ArticleHash, long? ImageId, string? BlobHash, string? From, string? To, string Search, string[] SearchColumns, string Order, bool UniqueImages);
+    private sealed record GalleryQuery(string ArticleHash, long? ImageId, long? SharedImageId, string? From, string? To, string Search, string[] SearchColumns, string Order, bool UniqueImages);
     private sealed record GalleryReturnState(
         string Search, DateTime From, bool FromChecked, DateTime To, bool ToChecked,
         int Sort, int Grouping, int ArticleIndex, string ManualEntry, string? ArticleHash,
-        long? ImageId, string? BlobHash, int Offset, Point Scroll, string Status, GalleryImageInfo Image);
+        long? ImageId, long? SharedImageId, int Offset, Point Scroll, string Status, GalleryImageInfo Image);
 }

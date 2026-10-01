@@ -16,6 +16,7 @@ internal sealed partial class FeedMonitor : IDisposable
     private readonly object _archiveLock = new();
     private readonly CancellationTokenSource _archiveShutdown = new();
     private Task _archiveWork = Task.CompletedTask;
+    private Task _imageWork = Task.CompletedTask;
     private Task? _stopWork;
     private bool _disposed;
     private long _archiveRevision;
@@ -43,7 +44,7 @@ internal sealed partial class FeedMonitor : IDisposable
     public async Task<ScanResult> ScanAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        StartArchiveWorker(cancellationToken);
+        StartBackgroundWork(cancellationToken);
         var health = _storage.FeedHealthRecords().ToDictionary(h => h.Url);
         var results = new System.Collections.Concurrent.ConcurrentBag<(FeedConfig Feed, FeedEntry[] Entries, FeedHealth Health)>();
         await Parallel.ForEachAsync(_config.Feeds.Where(f => f.Enabled),
@@ -128,14 +129,40 @@ internal sealed partial class FeedMonitor : IDisposable
         return new ScanResult(alerts, logOnly, states, newArticles);
     }
 
-    private void StartArchiveWorker(CancellationToken token)
+    internal void StartBackgroundWork(CancellationToken token = default)
     {
         lock (_archiveLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (!_config.ArchiveEnabled || !_archiveWork.IsCompleted) return;
-            _archiveWork = Task.Run(() => ArchiveInBackgroundAsync(token));
+            if (_imageWork.IsCompleted)
+                _imageWork = Task.Run(() => DeduplicateImagesInBackgroundAsync(token));
+            if (_config.ArchiveEnabled && _archiveWork.IsCompleted)
+                _archiveWork = Task.Run(() => ArchiveInBackgroundAsync(token));
         }
+    }
+
+    private async Task DeduplicateImagesInBackgroundAsync(CancellationToken startupToken)
+    {
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(startupToken, _archiveShutdown.Token);
+        var token = lifetime.Token;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                var processed = 0;
+                try
+                {
+                    processed = _storage.ConsolidateImageBatch(cancellationToken: token).Processed;
+                    if (processed > 0) Interlocked.Increment(ref _archiveRevision);
+                }
+                catch (Exception ex) when (!token.IsCancellationRequested)
+                {
+                    Log("ERROR", "Image deduplication: " + ex.Message);
+                }
+                await Task.Delay(processed > 0 ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(5), token);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
     }
 
     private async Task ArchiveInBackgroundAsync(CancellationToken scanToken)
@@ -414,7 +441,7 @@ internal sealed partial class FeedMonitor : IDisposable
         {
             if (_stopWork is not null) return _stopWork;
             _disposed = true;
-            var work = _archiveWork;
+            var work = Task.WhenAll(_archiveWork, _imageWork);
             return _stopWork = Task.Run(async () =>
             {
                 try

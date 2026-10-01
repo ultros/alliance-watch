@@ -105,6 +105,73 @@ internal static class GalleryBrowserTests
         Assert(gallery.CachedThumbnailCount <= 320, "The thumbnail cache must remain bounded for large archives.");
     }
 
+    public static void VerifyGalleryLinksDuringImageMigration()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "aw-gallery-rehash-" + Guid.NewGuid() + ".db");
+        try
+        {
+            var storage = new Storage(path);
+            storage.Initialize();
+            storage.MigrateAssessment();
+            using var bitmap = new Bitmap(4, 4);
+            using var png = new MemoryStream();
+            bitmap.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            using var compressed = new MemoryStream();
+            using (var gzip = new GZipStream(compressed, CompressionLevel.Fastest, leaveOpen: true)) gzip.Write(png.ToArray());
+            var data = compressed.ToArray();
+            var legacyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)).ToLowerInvariant();
+            var canonicalHash = Storage.ImageContentHash(data);
+            for (var i = 0; i < 3; i++)
+            {
+                var article = "rehash-" + i;
+                storage.InsertArticle(article, "fixture", article, "https://example.invalid/" + article, DateTimeOffset.UtcNow.ToString("O"), "");
+                storage.SaveArticleArchive(new ArticleArchive(article, "https://example.invalid/" + article, "text/html", 0, 0, [], [],
+                    [new ArchivedImage(0, "source", "resolved", "image/png", "fixture", (int)png.Length, data)]));
+            }
+            using (var db = new SqliteConnection("Data Source=" + path))
+            {
+                db.Open();
+                using var command = db.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO image_blobs(sha256,image_gzip,compressed_bytes)
+                    SELECT $legacy,image_gzip,compressed_bytes FROM image_blobs WHERE sha256=$canonical;
+                    UPDATE article_images SET blob_hash=$legacy;
+                    DELETE FROM image_blobs WHERE sha256=$canonical;
+                    """;
+                command.Parameters.AddWithValue("$legacy", legacyHash);
+                command.Parameters.AddWithValue("$canonical", canonicalHash);
+                command.ExecuteNonQuery();
+            }
+            using var form = new DatabaseBrowserForm(storage);
+            _ = form.Handle;
+            Field<ComboBox>(form, "_viewPicker").SelectedIndex = 3;
+            Invoke(form, "SetGalleryMode", true);
+            var gallery = Field<VirtualImageGallery>(form, "_gallery");
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (gallery.ItemCount == 0 && watch.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                Application.DoEvents();
+                Thread.Sleep(5);
+            }
+            var card = gallery.VisibleItems().Single();
+            Assert(card.BlobHash == legacyHash, "The card must cache a pre-conversion hash.");
+            Invoke(form, "OpenGalleryImageInTable", card);
+            var grid = Field<DataGridView>(form, "_grid");
+            Assert(grid.Rows.Count == 3, "Inspection must initially show all article links.");
+            storage.ConsolidateImages();
+            Invoke(form, "LoadPage");
+            Assert(grid.Rows.Count == 3, "An open inspection must retain its article links after background rehashing.");
+            Invoke(form, "ReturnToGallery");
+            Invoke(form, "OpenGalleryImageInTable", card);
+            Assert(grid.Rows.Count == 3, "A cached gallery card must resolve the current hash after background rehashing.");
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var suffix in new[] { "", "-wal", "-shm" }) if (File.Exists(path + suffix)) File.Delete(path + suffix);
+        }
+    }
+
     public static void VerifyBrowserPagingAndSearch()
     {
         var path = Path.Combine(Path.GetTempPath(), "aw-browser-test-" + Guid.NewGuid() + ".db");

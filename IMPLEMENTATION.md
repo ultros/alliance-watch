@@ -171,6 +171,17 @@ parsers accept up to 5,000 items per response. Archival work runs separately wit
 article worker, bounded images and a per-article time budget. Diagnostic logs rotate
 at 10 MiB; audit rows are not rotated away.
 
+New image payloads are keyed by SHA-256 of the original image bytes, independent of
+gzip encoding and URL. Article-image rows retain occurrence metadata and reference
+one shared payload. An always-active background worker converts legacy inline images
+and compressed-payload hashes, including when new archival downloads are disabled.
+Each batch handles at most 25 images and approximately 32 MiB of compressed data
+(one larger image is allowed); hashing precedes the short write transaction. Links
+are repointed before obsolete blobs are removed in the same transaction. Cancellation
+rolls back unfinished batches, and pending-work indexes let idle checks avoid scanning
+the image archive. Freed pages are reused; the optional offline compaction command
+can shrink the physical database file.
+
 Evidence search displays 250 rows at a time, with debounced text filtering. The console
 loads at most 100,000 normalized records and 60,000 compact assessment summaries.
 The scoring path refuses to publish a partial assessment if the 100,000-record working

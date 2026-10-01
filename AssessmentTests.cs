@@ -36,6 +36,10 @@ internal static class AssessmentTests
         Test("Virtual image gallery windowing", GalleryBrowserTests.VerifyVirtualGalleryWindowing);
         Test("Gallery readers never make monitor writes read-only", GalleryBrowserTests.VerifyGalleryReadsDoNotMakeMonitorReadOnly);
         Test("Shared image payloads and legacy migration", GalleryBrowserTests.VerifyImageDeduplication);
+        Test("Image content hashes preserve article links across URLs and gzip encodings", ImageDeduplicationTests.VerifyContentHashAndArticleLinks);
+        Test("Image deduplication runs continuously with archives disabled and resumes after restart", ImageDeduplicationTests.VerifyAlwaysActiveMigration);
+        Test("Image migration and parallel archival preserve one payload and every article link", ImageDeduplicationTests.VerifyConcurrentMigrationAndArchival);
+        Test("Gallery article links survive background image rehashing", GalleryBrowserTests.VerifyGalleryLinksDuringImageMigration);
         Test("Database browser paging and global search", GalleryBrowserTests.VerifyBrowserPagingAndSearch);
         Test("App closes after gallery use without waiting on stalled archives", GalleryBrowserTests.VerifyCloseAfterGallery);
         Test("All-field archive search includes old articles and compressed text", ArticleSearchTests.VerifyAllFieldsAndOldArticles);

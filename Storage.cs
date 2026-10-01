@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 
 namespace AllianceWatch;
@@ -96,7 +95,8 @@ internal sealed partial class Storage(string databasePath)
             CREATE TABLE IF NOT EXISTS image_blobs (
                 sha256 TEXT PRIMARY KEY,
                 image_gzip BLOB NOT NULL,
-                compressed_bytes INTEGER NOT NULL
+                compressed_bytes INTEGER NOT NULL,
+                hash_version INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_archives_status ON article_archives(fetch_status, attempts);
             CREATE INDEX IF NOT EXISTS idx_article_images_hash ON article_images(article_hash, position);
@@ -129,6 +129,20 @@ internal sealed partial class Storage(string databasePath)
         using var imageIndex = connection.CreateCommand();
         imageIndex.CommandText = "CREATE INDEX IF NOT EXISTS idx_article_images_blob ON article_images(blob_hash)";
         imageIndex.ExecuteNonQuery();
+        using var hashColumn = connection.CreateCommand();
+        hashColumn.CommandText = "SELECT 1 FROM pragma_table_info('image_blobs') WHERE name = 'hash_version'";
+        if (hashColumn.ExecuteScalar() is null)
+        {
+            using var migrate = connection.CreateCommand();
+            migrate.CommandText = "ALTER TABLE image_blobs ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 0";
+            migrate.ExecuteNonQuery();
+        }
+        using var pendingImages = connection.CreateCommand();
+        pendingImages.CommandText = """
+            CREATE INDEX IF NOT EXISTS idx_image_blobs_pending_hash ON image_blobs(sha256) WHERE hash_version=0;
+            CREATE INDEX IF NOT EXISTS idx_article_images_inline ON article_images(id) WHERE blob_hash IS NULL AND length(image_gzip)>0;
+            """;
+        pendingImages.ExecuteNonQuery();
     }
 
     public bool InsertArticle(string hash, string feed, string title, string url, string published, string summary)
@@ -185,7 +199,10 @@ internal sealed partial class Storage(string databasePath)
 
     public void SaveArticleArchive(ArticleArchive archive)
     {
-        var uniqueImages = archive.Images.DistinctBy(image => image.ResolvedUrl, StringComparer.Ordinal).ToList();
+        // Hash before taking SQLite's write lock. URLs remain article metadata;
+        // the original image bytes identify the payload shared across articles.
+        var uniqueImages = archive.Images.DistinctBy(image => image.ResolvedUrl, StringComparer.Ordinal)
+            .Select(image => (Image: image, Hash: ImageContentHash(image.CompressedData))).ToList();
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
         var replacedHashes = new HashSet<string>(StringComparer.Ordinal);
@@ -231,7 +248,7 @@ internal sealed partial class Storage(string databasePath)
             command.Parameters.AddWithValue("$htmlBytes", archive.HtmlBytes);
             command.Parameters.AddWithValue("$textBytes", archive.TextBytes);
             command.Parameters.AddWithValue("$compressedBytes",
-                archive.CompressedHtml.Length + archive.CompressedText.Length + uniqueImages.Sum(x => x.CompressedData.Length));
+                archive.CompressedHtml.Length + archive.CompressedText.Length + uniqueImages.Sum(x => x.Image.CompressedData.Length));
             command.Parameters.AddWithValue("$imageCount", uniqueImages.Count);
             command.Parameters.AddWithValue("$fetched", DateTimeOffset.UtcNow.ToString("O"));
             command.ExecuteNonQuery();
@@ -245,17 +262,14 @@ internal sealed partial class Storage(string databasePath)
             delete.ExecuteNonQuery();
         }
 
-        foreach (var image in uniqueImages)
+        var storedSizes = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (image, blobHash) in uniqueImages)
         {
-            var blobHash = Convert.ToHexString(SHA256.HashData(image.CompressedData)).ToLowerInvariant();
-            using (var blob = connection.CreateCommand())
+            if (!storedSizes.TryGetValue(blobHash, out var storedSize))
             {
-                blob.Transaction = transaction;
-                blob.CommandText = "INSERT OR IGNORE INTO image_blobs(sha256,image_gzip,compressed_bytes) VALUES($hash,$data,$bytes)";
-                blob.Parameters.AddWithValue("$hash", blobHash);
-                blob.Parameters.Add("$data", SqliteType.Blob).Value = image.CompressedData;
-                blob.Parameters.AddWithValue("$bytes", image.CompressedData.Length);
-                blob.ExecuteNonQuery();
+                StoreImageBlob(connection, transaction, blobHash, image.CompressedData);
+                storedSize = ImageBlobSize(connection, transaction, blobHash);
+                storedSizes.Add(blobHash, storedSize);
             }
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -273,7 +287,7 @@ internal sealed partial class Storage(string databasePath)
             command.Parameters.AddWithValue("$type", image.MimeType);
             command.Parameters.AddWithValue("$alt", image.AltText);
             command.Parameters.AddWithValue("$originalBytes", image.OriginalBytes);
-            command.Parameters.AddWithValue("$compressedBytes", image.CompressedData.Length);
+            command.Parameters.AddWithValue("$compressedBytes", storedSize);
             command.Parameters.AddWithValue("$blobHash", blobHash);
             command.ExecuteNonQuery();
         }
@@ -286,57 +300,6 @@ internal sealed partial class Storage(string databasePath)
             cleanup.ExecuteNonQuery();
         }
         transaction.Commit();
-    }
-
-    // Idempotent, crash-safe migration: each batch first stores the shared blob,
-    // then replaces legacy inline bytes with an empty BLOB in the same transaction.
-    public (long Links, long UniqueBlobs, long ReclaimedBytes) ConsolidateImages(Action<long, long>? progress = null)
-    {
-        using var connection = Open();
-        long migrated = 0, reclaimed = 0;
-        using (var count = connection.CreateCommand())
-        {
-            count.CommandText = "SELECT COUNT(*) FROM article_images WHERE blob_hash IS NULL AND length(image_gzip)>0";
-            var remaining = Convert.ToInt64(count.ExecuteScalar() ?? 0L);
-            while (remaining > 0)
-            {
-                var batch = new List<(long Id, byte[] Data)>();
-                using (var read = connection.CreateCommand())
-                {
-                    read.CommandText = "SELECT id,image_gzip FROM article_images WHERE blob_hash IS NULL AND length(image_gzip)>0 ORDER BY id LIMIT 50";
-                    using var reader = read.ExecuteReader();
-                    while (reader.Read()) batch.Add((reader.GetInt64(0), reader.GetFieldValue<byte[]>(1)));
-                }
-                if (batch.Count == 0) break;
-                using var transaction = connection.BeginTransaction();
-                foreach (var (id, data) in batch)
-                {
-                    var hash = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
-                    using var insert = connection.CreateCommand();
-                    insert.Transaction = transaction;
-                    insert.CommandText = "INSERT OR IGNORE INTO image_blobs(sha256,image_gzip,compressed_bytes) VALUES($hash,$data,$bytes)";
-                    insert.Parameters.AddWithValue("$hash", hash);
-                    insert.Parameters.Add("$data", SqliteType.Blob).Value = data;
-                    insert.Parameters.AddWithValue("$bytes", data.Length);
-                    if (insert.ExecuteNonQuery() == 0) reclaimed += data.Length;
-                    using var update = connection.CreateCommand();
-                    update.Transaction = transaction;
-                    update.CommandText = "UPDATE article_images SET blob_hash=$hash,image_gzip=x'' WHERE id=$id AND blob_hash IS NULL";
-                    update.Parameters.AddWithValue("$hash", hash);
-                    update.Parameters.AddWithValue("$id", id);
-                    update.ExecuteNonQuery();
-                }
-                transaction.Commit();
-                migrated += batch.Count;
-                remaining -= batch.Count;
-                progress?.Invoke(migrated, migrated + remaining);
-            }
-        }
-        using var final = connection.CreateCommand();
-        final.CommandText = "SELECT (SELECT COUNT(*) FROM article_images),(SELECT COUNT(*) FROM image_blobs)";
-        using var result = final.ExecuteReader();
-        result.Read();
-        return (result.GetInt64(0), result.GetInt64(1), reclaimed);
     }
 
     public void CompactDatabase()

@@ -874,6 +874,7 @@ internal sealed class MainForm : Form
         if(_offline) ExitFullScreen(); else EnterFullScreen();
         _clockTimer.Start();
         UpdateClock();
+        if (!_offline) _monitor.StartBackgroundWork(_shutdown.Token);
         RefreshDashboard();
         try { _assessment = await Task.Run(() => _storage.RefreshAssessment(new AssessmentEngine(_config.Assessment), _config,"STARTUP")); }
         catch(Exception ex) { if (!IsDisposed && !Disposing && !_shutdown.IsCancellationRequested) _cycleSummary.Text="ASSESSMENT INITIALIZATION FAILED // "+ex.Message; }

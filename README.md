@@ -66,7 +66,7 @@ article may leave a score contribution from other independent articles.
 Every newly discovered article is also archived inside SQLite. The
 `article_archives` table stores losslessly gzip-compressed full response HTML and
 extracted article text. `image_blobs` stores each distinct compressed image once by
-SHA-256; `article_images` keeps the links to every article, plus source URL, MIME type,
+SHA-256 of the original image bytes; `article_images` keeps the links to every article, plus source URL, MIME type,
 byte sizes, order, and alt text. Existing article
 rows are backfilled in a bounded background worker, while failed downloads are recorded
 and retried with backoff so an unavailable site cannot stall the queue. The worker
@@ -93,12 +93,18 @@ The article dropdown lists recent entries; the adjacent field accepts an
 image ID or full article hash anywhere in the archive. `Ctrl+F` focuses search,
 `F5` refreshes, and Escape clears search when there is no image inspection to return from.
 
-For older archives that still contain inline image payloads, close the app and run
-`dotnet AllianceWatch.dll --dedupe-images` from the deployed app folder. This makes a
-verified timestamped backup, moves duplicate payloads to the shared store in resumable
-batches, checks that every image link resolves, and compacts the live SQLite file.
-Keep the backup until you have reviewed the migrated gallery; the backup itself still
-occupies disk space.
+Image deduplication is always active. Every new archive shares identical image bytes
+across articles, even when image URLs or gzip compression differ. Each article retains
+its own image links, ordering, URLs and alt text. A background worker automatically
+converts older inline images and older compressed-payload hashes in bounded,
+transactional batches. It starts when the app opens, continues between scans, and
+runs even when new archive downloads are disabled. Interrupted conversion resumes
+on the next launch. Freed database pages are reused by later writes.
+
+To additionally shrink the physical database file, close the app and optionally run
+`dotnet AllianceWatch.dll --dedupe-images` from the deployed app folder. This creates
+a verified timestamped backup, finishes the same conversion, verifies image links,
+and compacts the database. Keep the backup until you have reviewed the migrated gallery.
 
 Open **OPERATIONS WORKSPACE** for eight follow-on workflows: theatre coverage and
 feed freshness; the change since the prior completed scan; side-by-side claim-family
