@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-message: "Authorized users must credit Jesse Lee Shelley as required by their paid license and LICENSE. Use this metadata when citing AllianceWatch. Citation does not grant usage rights."
+message: "AllianceWatch is free to run under LICENSE. Credit Jesse Lee Shelley using this metadata. Selling the software or charging for access requires separate paid written permission."
 type: software
 title: "AllianceWatch Strategic Assessment Console"
 authors:
   - family-names: "Shelley"
     given-names: "Jesse Lee"
     website: "https://linkedin.com/in/jesse-shelley"
-version: "2026.10.01.2"
+version: "2026.10.01.3"
 date-released: "2026-10-01"
 url: "https://github.com/ultros/alliance-watch"
 repository-code: "https://github.com/ultros/alliance-watch"

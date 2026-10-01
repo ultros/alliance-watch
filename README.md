@@ -20,25 +20,30 @@ archives, logs, credentials and generated test artifacts are excluded from Git.
 
 Copyright (c) 2026 **Jesse Lee Shelley**. All Rights Reserved.
 
-Original AllianceWatch material is **proprietary** under the [paid-use terms](LICENSE).
-Third parties must obtain a **separate paid written license** from Jesse Lee Shelley
-before running, using, modifying, redistributing, or hosting it. Personal, research,
-educational, nonprofit, and commercial operational use all require paid permission.
-Public repository access and downloadable binaries do not grant a free-use license.
-Limited GitHub viewing and forking rights remain subject to GitHub's terms.
+AllianceWatch is **free to run and use**, including for internal business purposes,
+under the [Free-Use No-Resale License](LICENSE). You may modify it and share copies
+or provide access free of charge while retaining the required credit and notices.
+You do not need a paid license to run it.
+
+**Selling the software or derivatives, including them in paid products or bundles,
+or charging for hosted access requires Jesse Lee Shelley's separate paid written
+permission.** Independent reports and analysis may be sold with attribution;
+consulting, installation, training, and support may be charged for separately when
+the software itself remains free. Read LICENSE for the exact conditions.
+This is a source-available license with resale restrictions.
 
 Contact and creator profile: [Jesse Lee Shelley on LinkedIn](https://linkedin.com/in/jesse-shelley).
 Project repository: [ultros/alliance-watch](https://github.com/ultros/alliance-watch).
-Prices and permitted usage are agreed directly with the creator in the separate license.
-Authorized users must retain the attribution and provide credit as specified in LICENSE.
+Resale or paid-access terms are agreed directly with the creator in a separate license.
+Users must retain the attribution and provide credit as specified in LICENSE.
 Third-party components retain their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-Citation for authorized use: **Shelley, J. L. (2026). AllianceWatch Strategic
+Citation: **Shelley, J. L. (2026). AllianceWatch Strategic
 Assessment Console [Computer software]. https://github.com/ultros/alliance-watch**.
 [CITATION.cff](CITATION.cff) provides machine-readable citation information.
-Citation does not replace or grant paid usage permission.
+Citation does not grant resale or paid-access permission.
 
-## Run the C# application (authorized users)
+## Run the C# application
 
 Requirements: Windows 10/11 and the .NET 8 SDK or Desktop Runtime.
 
@@ -184,7 +189,7 @@ The smoke mode uses `assessment-ui-smoke.db`, clearly marked synthetic data, and
 network collection. Tests and benchmarks use temporary databases and simulated HTTP.
 Reports are written to `assessment-test-results.txt` and `assessment-benchmark.txt`.
 
-## Legacy Python monitor (authorized users)
+## Legacy Python monitor
 
 AllianceWatch is a lightweight Windows RSS monitor for language suggesting a shift from ordinary geopolitical cooperation toward formal defense obligations, integrated command, wartime logistics, or coordinated military planning. It stores articles and matches locally in SQLite and does not open or execute downloaded content.
 

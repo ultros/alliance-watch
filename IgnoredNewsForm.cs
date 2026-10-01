@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+// SPDX-License-Identifier: LicenseRef-AllianceWatch-Free-Use-No-Resale
 // Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
-// Third-party use requires a separately agreed paid written license.
+// Free to run; selling or paid access requires Owner's paid written permission.
 // See LICENSE and NOTICE for terms and required attribution.
 // Creator: https://linkedin.com/in/jesse-shelley
 // Repository: https://github.com/ultros/alliance-watch

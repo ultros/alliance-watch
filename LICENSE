@@ -1,6 +1,6 @@
-AllianceWatch Proprietary Paid-Use Terms
-Version 1.0 - October 1, 2026
-SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+AllianceWatch Free-Use No-Resale License
+Version 2.0 - October 1, 2026
+SPDX-License-Identifier: LicenseRef-AllianceWatch-Free-Use-No-Resale
 
 Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
 
@@ -8,73 +8,101 @@ Copyright owner and licensor: Jesse Lee Shelley ("Owner")
 LinkedIn: https://linkedin.com/in/jesse-shelley
 Project repository: https://github.com/ultros/alliance-watch
 
-1. Scope
+1. Scope and acceptance
 
 These terms apply to the original AllianceWatch source code, scripts,
 configuration, documentation, original project assets, and executable software
-to the extent that their rights are held by Owner (the "Software"). Third-party
-components and collected publisher content are excluded; see section 6.
+to the extent that their rights are held by Owner (the "Software"). Modified
+versions and works derived from that material are included in these terms.
+Third-party components and collected publisher content are excluded; see
+section 7. By exercising the permissions below, you accept their conditions.
 
-2. No general permission or free-use license
+2. Free use, modification, and sharing
 
-All rights in the Software are reserved. This document does not grant any
-third party a free, evaluation, personal, educational, research, nonprofit,
-commercial, or other operational-use license.
+Subject to these terms, Owner grants you a worldwide, nonexclusive, royalty-free
+copyright license to download, install, run, use, copy, inspect, and modify the
+Software. You may use it for personal, educational, research, nonprofit,
+government, or internal business purposes without paying Owner or seeking
+separate permission. Organizations may run it for their own employees and
+internal operations, including on their own servers.
 
-Except for rights that cannot legally be restricted or the limited repository
-access described in section 5, a third party must not run, use, reproduce beyond
-permitted repository access, modify, create derivative works from, distribute,
-sublicense, sell, host, or provide the Software or its functionality to others
-without the paid written permission described in section 3.
+You may distribute original or modified copies free of charge, and provide
+others access to its functionality free of charge, if you comply with sections
+3 and 4. Include LICENSE, NOTICE, and applicable third-party notices in copies
+you share. Clearly identify your modifications and their dates. Each recipient
+receives permission directly from Owner under these terms; you may not grant
+rights to Owner's material that exceed these terms. You do not have to publish
+private modifications.
 
-Public availability of source code or downloadable binaries does not grant
-permission to run or otherwise use the Software. Credit to Owner does not
-substitute for a paid license.
+3. No resale or paid access without a separate agreement
 
-3. A separate paid written license is required
+Without Owner's separate paid written permission, you must not:
 
-Before third-party operational use or any other reserved activity, the third
-party must obtain a separate written license agreement authorized by Owner and
-pay the fees required by that agreement. The agreement must identify the
-licensee and specify the permitted activities and applicable scope, conditions,
-and duration. Only the rights expressly granted in that agreement are allowed.
+  a. Sell, rent, lease, or distribute the Software or a modified or derived
+     version for a fee or other compensation, including a license fee,
+     mandatory donation, or subscription.
+  b. Include the Software in a paid product, paid bundle, or paid subscription
+     through which customers obtain copies of it or access to its functionality.
+  c. Charge others for access to the Software or its functionality, including
+     hosted services, software-as-a-service, API access, or paid desktop access.
+  d. Offer paid sublicenses or other paid rights to Owner's Software.
 
-No price, payment endpoint, automatic purchase right, or standard usage grant
-is established by this document. Sending money or requesting permission alone
-does not create a license. Contact Owner to agree on licensing terms:
+Internal use by a business is allowed. You may charge for independent reports,
+analysis, or other work produced using the Software, subject to the attribution
+in section 4, if the customer is not receiving a copy of the Software or paid
+access to its functionality. You may charge separately for consulting, training,
+installation, or support if obtaining and using the Software remains free and
+the service fee is not a condition for a Software license or paid access.
+
+To sell the Software or offer paid access, contact Owner at:
 https://linkedin.com/in/jesse-shelley
+Owner must authorize the scope in a separate written license agreement, and
+you must pay the fees required by that agreement. No price, payment endpoint,
+automatic purchase right, or standard resale grant is established here.
+Sending money or requesting permission alone does not create those rights.
+Owner may sell the Software or grant other licenses to it.
 
-4. Required attribution for authorized use
+4. Required attribution
 
-Unless Owner expressly agrees otherwise in the separate written agreement,
-authorized copies, distributions, derivative applications, and hosted interfaces
-must retain copyright and license notices and prominently credit:
+Retain copyright and license notices in copies and modifications. Applications
+and hosted interfaces must prominently display readable credit and both links:
 
     AllianceWatch by Jesse Lee Shelley
     Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
     LinkedIn: https://linkedin.com/in/jesse-shelley
     Project: https://github.com/ultros/alliance-watch
 
-Authorized graphical applications must display this credit and both links in a
-readable attribution area. Licensees must credit Jesse Lee Shelley and identify
-AllianceWatch with its repository link in public reports, publications, or
-presentations describing their authorized use. This is a condition of the paid
-permission; it does not assert copyright over facts or independently authored
-outputs, or impose obligations on people who have not accepted a license.
+Do not remove or conceal the attribution area in the graphical application.
+Public reports, publications, or presentations describing your use of the
+Software or based substantially on its analyses must credit Jesse Lee Shelley
+and identify AllianceWatch with its repository link. This is a condition of
+the permissions granted here; it does not assert copyright over facts or
+independently authored outputs, or bind people who have not accepted a license.
 
-Attribution must not falsely imply Owner's endorsement of a licensee, product,
+Attribution must not falsely imply Owner's endorsement of a user, product,
 organization, modification, or analytical conclusion. No trademark rights are
-granted by these terms.
+granted. Owner may agree to different attribution in a separate written license.
 
-5. GitHub access and existing rights
+5. Earlier versions and existing rights
 
-While the repository is public on GitHub, the limited rights to view and fork
-its contents that are provided by the applicable GitHub Terms of Service are
-unaffected. Those repository-access rights are not an operational-use license
-from Owner. The same applies to rights required by applicable law. Nothing here
-purports to revoke rights already validly granted under a prior license.
+Owner also offers the permissions in this license for earlier AllianceWatch
+versions published by Owner at the project repository, to the extent Owner
+holds their rights. This additional grant permits free use of those versions
+even if an earlier notice required paid permission to run them.
 
-6. Third-party materials
+Nothing here revokes rights validly granted under a prior license or separate
+agreement. Rights required by applicable law and the applicable GitHub Terms
+of Service, including public repository viewing and forking, remain unaffected.
+
+6. Compliance
+
+The permissions in this license depend on compliance with its conditions.
+They end if you violate those conditions. On your first violation, if you
+correct it within 30 days after learning of it and take reasonable steps to
+remedy its consequences, your permissions are reinstated. This does not excuse
+amounts owed under a separate agreement or erase liability for a past violation.
+
+7. Third-party materials
 
 Separately licensed libraries, runtimes, public-domain map data, and other
 third-party materials retain their own terms. These restrictions do not replace
@@ -82,7 +110,7 @@ those terms or restrict rights granted by their respective rights holders.
 Downloaded articles, images, and other publisher content retain their original
 rights. See THIRD-PARTY-NOTICES.md and the bundled third-party license texts.
 
-7. Warranty and liability
+8. Warranty and liability
 
 Unless a separate written agreement expressly provides otherwise, the Software
 is provided "AS IS", without warranties of any kind, express or implied,
@@ -93,8 +121,7 @@ data, interruption, or indirect, incidental, special, or consequential damages.
 Nothing in these terms excludes liability that applicable law does not permit
 to be excluded.
 
-8. Rights reserved
+9. Rights reserved
 
-Any permission beyond the limited access in section 5 must come from Owner's
-separate paid written agreement. No open-source license is granted for the
-Software by this document.
+All rights not expressly granted are reserved. This is a source-available
+free-use license with resale restrictions, not an open-source license.

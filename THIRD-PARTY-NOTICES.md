@@ -1,6 +1,6 @@
 # Third-party materials
 
-The proprietary paid-use terms in LICENSE apply to original AllianceWatch
+The Free-Use No-Resale License in LICENSE applies to original AllianceWatch
 material owned by Jesse Lee Shelley. They do not replace or restrict the
 separate licenses or rights of the following materials.
 
