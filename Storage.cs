@@ -309,23 +309,32 @@ internal sealed partial class Storage(string databasePath)
         transaction.Commit();
     }
 
-    public void CompactDatabase()
+    public void CompactDatabase(CancellationToken cancellationToken = default)
     {
         SqliteConnection.ClearAllPools();
         using var connection = Open();
         foreach (var statement in new[] { "PRAGMA wal_checkpoint(TRUNCATE)", "VACUUM", "PRAGMA wal_checkpoint(TRUNCATE)" })
         {
+            cancellationToken.ThrowIfCancellationRequested();
             using var command = connection.CreateCommand();
+            using var cancellation = cancellationToken.Register(command.Cancel);
             command.CommandTimeout = 600;
             command.CommandText = statement;
-            command.ExecuteNonQuery();
+            if (statement.StartsWith("PRAGMA wal_checkpoint", StringComparison.Ordinal))
+            {
+                using var checkpoint = command.ExecuteReader();
+                if (!checkpoint.Read() || checkpoint.GetInt64(0) != 0)
+                    throw new IOException("Another database reader is blocking compression. Close other database tools and retry; the recovery backup is retained.");
+            }
+            else command.ExecuteNonQuery();
         }
     }
 
     public string BackupBeforeImageConsolidation()
     {
         var backupPath = Path.Combine(Path.GetDirectoryName(databasePath)!,
-            "alliance_watch.before-image-dedupe-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".db");
+            "alliance_watch.before-image-dedupe-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff")
+                + "-" + Guid.NewGuid().ToString("N")[..8] + ".db");
         if (File.Exists(backupPath)) throw new IOException("A backup with this timestamp already exists.");
         using var source = Open();
         using var destination = new SqliteConnection(new SqliteConnectionStringBuilder

@@ -179,8 +179,21 @@ Each batch handles at most 25 images and approximately 32 MiB of compressed data
 (one larger image is allowed); hashing precedes the short write transaction. Links
 are repointed before obsolete blobs are removed in the same transaction. Cancellation
 rolls back unfinished batches, and pending-work indexes let idle checks avoid scanning
-the image archive. Freed pages are reused; the optional offline compaction command
-can shrink the physical database file.
+the image archive. Freed pages are reused. The manual Compress Database action
+stops archive/image workers while a modal progress window prevents application
+edits, creates a verified backup, rehashes all blobs (including current-version
+imports), relinks matching original image bytes, deletes unreferenced payloads,
+and runs WAL checkpoints and VACUUM. It verifies payload availability, database
+integrity and foreign keys afterward, then restarts collection when the window
+closes. Image IDs and occurrence metadata are preserved. Failed passes retain
+the backup and committed safe batches. The offline `--compress-db` command and
+its `--dedupe-images` alias use the same maintenance pipeline.
+
+Configuration defaults are also embedded in the executable assembly. Missing
+configuration is restored atomically without replacing user settings or touching
+the archive. Published runs choose the executable folder independently of the
+working directory; builds under the source project's `bin` folder preserve the
+source archive for `dotnet run`.
 
 Evidence search displays 250 rows at a time, with debounced text filtering. The console
 loads at most 100,000 normalized records and 60,000 compact assessment summaries.

@@ -47,6 +47,14 @@ Citation does not grant resale or paid-access permission.
 
 Requirements: Windows 10/11 and the .NET 8 SDK or Desktop Runtime.
 
+For a GitHub release, extract the entire ZIP to a writable folder and launch the
+`AllianceWatch.exe` in that folder. Keep its runtime files and `Assets` alongside
+it. The published app uses the configuration and database beside its executable;
+`dotnet run` uses the source folder's existing archive. If `config.json` is missing,
+startup restores the bundled defaults. Existing settings and databases are preserved.
+Folders named `previous-build-*` contain backup program files for restoration;
+launch the executable in the main app folder to use your current archive.
+
 ```powershell
 dotnet restore
 dotnet run --project AllianceWatch.csproj
@@ -128,10 +136,17 @@ transactional batches. It starts when the app opens, continues between scans, an
 runs even when new archive downloads are disabled. Interrupted conversion resumes
 on the next launch. Freed database pages are reused by later writes.
 
-To additionally shrink the physical database file, close the app and optionally run
-`dotnet AllianceWatch.dll --dedupe-images` from the deployed app folder. This creates
-a verified timestamped backup, finishes the same conversion, verifies image links,
-and compacts the database. Keep the backup until you have reviewed the migrated gallery.
+Use **COMPRESS DATABASE** in **OPERATOR CONTROL** to manually recheck every image,
+relink identical original image bytes to one shared payload, and shrink the physical
+database file. The button becomes available after an active scan finishes. Collection
+pauses while a progress window creates a verified backup, merges duplicates, removes
+unreferenced payloads, and reclaims unused space. Every article-image association,
+image ID, order, URL, and alt text is retained. Close the result window to resume
+monitoring. Keep the backup until you have reviewed the gallery.
+
+The offline command is also available: close the app and run
+`dotnet AllianceWatch.dll --compress-db` from the deployed app folder.
+`--dedupe-images` remains an alias for the same backup, relinking, and compaction pass.
 
 Open **OPERATIONS WORKSPACE** for eight follow-on workflows: theatre coverage and
 feed freshness; the change since the prior completed scan; side-by-side claim-family

@@ -31,8 +31,10 @@ Repository: https://github.com/ultros/alliance-watch
   <ItemGroup>
     <EmbeddedResource Include="Assets\AllianceWatch.ico" />
     <EmbeddedResource Include="Assets\AllianceWatch.png" />
+    <EmbeddedResource Include="config.json" LogicalName="AllianceWatch.DefaultConfig.json" />
     <None Update="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <None Update="Assets\ne_110m_land.geojson">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

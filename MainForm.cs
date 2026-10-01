@@ -17,7 +17,7 @@ internal sealed class MainForm : Form
     private readonly Storage _storage;
     private readonly Icon? _applicationIcon;
     private readonly Image? _brandImage;
-    private readonly FeedMonitor _monitor;
+    private FeedMonitor _monitor;
     private readonly System.Windows.Forms.Timer _clockTimer = new() { Interval = 1000 };
     private readonly System.Windows.Forms.Timer _pollTimer = new();
     private readonly System.Windows.Forms.Timer _archiveStatsTimer = new() { Interval = 5000 };
@@ -51,6 +51,7 @@ internal sealed class MainForm : Form
     private readonly Label _coverageBadge = new() { Dock = DockStyle.Fill, Font = UiTheme.Micro, ForeColor = UiTheme.Cyan,
         TextAlign = ContentAlignment.MiddleLeft, Cursor = Cursors.Hand, Text = "COVERAGE // CHECKING" };
     private readonly Button _scanButton = UiTheme.Button("[ RUN ACTIVE SCAN ]");
+    private readonly Button _compressButton = UiTheme.Button("[ COMPRESS DATABASE ]");
     private readonly Button _allFilter = UiTheme.Button("ALL SIGNALS");
     private readonly Button _criticalFilter = UiTheme.Button("CRITICAL");
     private readonly TextBox _archiveSearch = new() { Width = 260, MaxLength = 512, PlaceholderText = "Search all archived articles…", Tag = "archive-search" };
@@ -60,6 +61,7 @@ internal sealed class MainForm : Form
     private IReadOnlyList<DashboardEvent> _events = [];
     private readonly List<DashboardEvent> _localAlerts = [];
     private bool _scanning;
+    private bool _compressing;
     private bool _archiveStatsRefreshing;
     private int _scanVersion;
     private int _lastScanNewArticles;
@@ -384,8 +386,8 @@ internal sealed class MainForm : Form
         rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
         rail.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         rail.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 360));
-        const int minimumRailHeight = 932; // 142 + 150 + 140 + 140 + 360
+        rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 396));
+        const int minimumRailHeight = 968; // 142 + 150 + 140 + 140 + 396
         viewport.Controls.Add(rail);
         viewport.SizeChanged += (_, _) => rail.Height = Math.Max(minimumRailHeight, viewport.ClientSize.Height);
         rail.Height = minimumRailHeight;
@@ -446,8 +448,8 @@ internal sealed class MainForm : Form
         rail.Controls.Add(alerts, 0, 3);
 
         var control = new TelemetryPanel { Caption = "OPERATOR CONTROL", Dock = DockStyle.Fill };
-        var controlLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 9 };
-        for (var index = 0; index < 8; index++) controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        var controlLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10 };
+        for (var index = 0; index < 9; index++) controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
         _scanButton.Dock = DockStyle.Fill;
         _scanButton.Click += async (_, _) => await RunScanAsync();
@@ -483,6 +485,10 @@ internal sealed class MainForm : Form
         controlLayout.Controls.Add(operations, 0, 5);
         controlLayout.Controls.Add(help, 0, 6);
         controlLayout.Controls.Add(ignoredNews, 0, 7);
+        _compressButton.Dock = DockStyle.Fill;
+        _compressButton.Click += (_, _) => CompressDatabase();
+        _windowToolTip.SetToolTip(_compressButton, "Back up the database, relink identical images, and reclaim unused space. Collection pauses during compression.");
+        controlLayout.Controls.Add(_compressButton, 0, 8);
         controlLayout.Controls.Add(new Label
         {
             Text = "ESC EXIT // F11 SIZE // CTRL+SHIFT+→ SCREEN",
@@ -490,7 +496,7 @@ internal sealed class MainForm : Form
             ForeColor = UiTheme.Muted,
             Font = UiTheme.Micro,
             TextAlign = ContentAlignment.BottomCenter
-        }, 0, 8);
+        }, 0, 9);
         control.Controls.Add(controlLayout);
         rail.Controls.Add(control, 0, 4);
         return viewport;
@@ -929,6 +935,7 @@ internal sealed class MainForm : Form
 
     private async void MainForm_Shown(object? sender, EventArgs e)
     {
+        _compressButton.Enabled = false;
         if(_offline) ExitFullScreen(); else EnterFullScreen();
         _clockTimer.Start();
         UpdateClock();
@@ -938,6 +945,7 @@ internal sealed class MainForm : Form
         catch(Exception ex) { if (!IsDisposed && !Disposing && !_shutdown.IsCancellationRequested) _cycleSummary.Text="ASSESSMENT INITIALIZATION FAILED // "+ex.Message; }
         if (IsDisposed || Disposing || _shutdown.IsCancellationRequested) return;
         RefreshDashboard();
+        _compressButton.Enabled = true;
         if(_offline) { _cycleSummary.Text="SYNTHETIC UI TEST // NETWORK COLLECTION DISABLED"; _scanButton.Enabled=false; return; }
         _archiveStatsTimer.Start();
         await RunScanAsync();
@@ -945,14 +953,56 @@ internal sealed class MainForm : Form
         _pollTimer.Start();
     }
 
+    private void CompressDatabase()
+    {
+        if (_scanning || _compressing || IsDisposed || Disposing || _shutdown.IsCancellationRequested) return;
+        _compressing = true;
+        _scanVersion++;
+        _pollTimer.Stop();
+        _archiveStatsTimer.Stop();
+        _scanButton.Enabled = false;
+        _compressButton.Enabled = false;
+        try
+        {
+            // The modal window also prevents other open application windows
+            // from editing the database during its maintenance pass.
+            using var dialog = new DatabaseCompressionForm(_storage, _monitor.StopAsync, _shutdown.Token);
+            dialog.ShowDialog(this);
+            if (dialog.Result is { } result)
+                _cycleSummary.Text = $"DATABASE COMPRESSED // {result.ImageLinks:N0} ARTICLE-IMAGE LINKS // {result.UniqueImages:N0} UNIQUE IMAGES";
+        }
+        finally
+        {
+            _compressing = false;
+            if (!IsDisposed && !Disposing && !_shutdown.IsCancellationRequested)
+            {
+                // StopAsync releases the old worker lifetime. Restart using
+                // the same settings, feed health, and preserved database.
+                _monitor = new FeedMonitor(_config, _storage, Path.Combine(_appDirectory, "alliance_watch.log"));
+                if (!_offline)
+                {
+                    _monitor.StartBackgroundWork(_shutdown.Token);
+                    _pollTimer.Start();
+                    _archiveStatsTimer.Start();
+                }
+                _archiveStatsRevision = -1;
+                _archiveSummaryText = null;
+                _scanButton.Enabled = !_offline;
+                _compressButton.Enabled = true;
+                RefreshDashboard();
+            }
+        }
+    }
+
     private async Task RunScanAsync()
     {
-        if (_scanning || _offline || IsDisposed || Disposing || _shutdown.IsCancellationRequested) return;
+        if (_scanning || _compressing || _offline || IsDisposed || Disposing || _shutdown.IsCancellationRequested) return;
         var cancellationToken = _shutdown.Token;
         var scanVersion = ++_scanVersion;
         _scanning = true;
         _archiveSummaryText = null;
         _scanButton.Enabled = false;
+        _compressButton.Enabled = false;
         _scanStateLabel.Text = "ACTIVE COLLECTION";
         _scanStateLabel.ForeColor = UiTheme.Yellow;
         _cycleSummary.Text = "LINKING REMOTE NODES // RETRIEVING SOURCE MATERIAL";
@@ -995,6 +1045,7 @@ internal sealed class MainForm : Form
             if (!IsDisposed && !Disposing && !cancellationToken.IsCancellationRequested)
             {
                 _scanButton.Enabled = true;
+                _compressButton.Enabled = true;
                 _scanStateLabel.Text = "SYSTEM READY";
                 _scanStateLabel.ForeColor = UiTheme.Cyan;
                 _nextScanUtc = DateTime.UtcNow.AddMinutes(_config.PollMinutes);
@@ -1004,7 +1055,7 @@ internal sealed class MainForm : Form
 
     private async Task RefreshArchiveStatsAsync()
     {
-        if (_offline || _scanning || _archiveStatsRefreshing || IsDisposed || Disposing ||
+        if (_offline || _scanning || _compressing || _archiveStatsRefreshing || IsDisposed || Disposing ||
             _shutdown.IsCancellationRequested || _archiveSummaryText is null || _cycleSummary.Text != _archiveSummaryText) return;
 
         var archiveRevision = _monitor.ArchiveRevision;

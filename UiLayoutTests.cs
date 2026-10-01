@@ -49,7 +49,7 @@ internal static class UiLayoutTests
         var operatorPanel = Descendants(main).OfType<TelemetryPanel>()
             .Single(panel => panel.Caption == "OPERATOR CONTROL");
         var actions = Descendants(operatorPanel).OfType<Button>().ToArray();
-        Require(actions.Length == 8, "Operator control must expose all eight actions");
+        Require(actions.Length == 9, "Operator control must expose all nine actions, including database compression");
         Require(actions.All(button => button.Height >= 29), "Operator actions need full-height click targets");
         var ordered = actions.OrderBy(button => button.Top).ToArray();
         Require(ordered.Zip(ordered.Skip(1)).All(pair => pair.First.Bottom <= pair.Second.Top),

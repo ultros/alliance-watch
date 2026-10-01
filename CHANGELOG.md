@@ -2,6 +2,11 @@
 
 ## 2026-10-01
 
+- Added a manual Compress Database action with progress, verified backup, full
+  image-content rehashing and relinking, orphan-payload cleanup, and compaction.
+  Collection pauses and resumes around maintenance; article-image metadata is retained.
+- Restored missing configuration from bundled defaults without replacing user
+  settings or databases. Published launches use the executable's archive folder.
 - Allowed free use, modification, and free sharing of AllianceWatch with attribution,
   including internal business use. Selling copies or derivatives, paid bundles,
   and paid hosted access require the owner's paid written permission.

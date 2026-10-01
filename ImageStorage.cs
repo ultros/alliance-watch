@@ -141,16 +141,19 @@ internal sealed partial class Storage
 
     // The optional offline command uses exactly the same resumable migration as
     // the background worker, then can compact the database to shrink the file.
-    public (long Links, long UniqueBlobs, long ReclaimedBytes) ConsolidateImages(Action<long, long>? progress = null)
+    public (long Links, long UniqueBlobs, long ReclaimedBytes) ConsolidateImages(Action<long, long>? progress = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         long processed = 0, reclaimed = 0;
         using var connection = Open();
         using var count = connection.CreateCommand();
         count.CommandText = "SELECT (SELECT COUNT(*) FROM image_blobs WHERE hash_version=0)+(SELECT COUNT(*) FROM article_images WHERE blob_hash IS NULL AND length(image_gzip)>0)";
         var total = Convert.ToInt64(count.ExecuteScalar());
+        progress?.Invoke(0, total);
         while (true)
         {
-            var batch = ConsolidateImageBatch();
+            var batch = ConsolidateImageBatch(cancellationToken: cancellationToken);
             if (batch.Processed == 0) break;
             processed += batch.Processed;
             reclaimed += batch.ReclaimedBytes;

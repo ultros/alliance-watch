@@ -16,35 +16,23 @@ internal static class Program
         if (args.Contains("--self-test")) { AssessmentTests.Run(); return; }
         if (args.Contains("--benchmark")) { AssessmentBenchmark.Run(); return; }
 
-        // Prefer the working folder so `dotnet run` reuses the existing Python-era database.
-        var appDirectory = Directory.GetCurrentDirectory();
-        if (!File.Exists(Path.Combine(appDirectory, "config.json")))
-            appDirectory = AppContext.BaseDirectory;
+        var appDirectory = StartupConfiguration.ResolveAppDirectory(AppContext.BaseDirectory, Directory.GetCurrentDirectory());
 
-        if (args.Contains("--dedupe-images"))
+        if (args.Contains("--dedupe-images") || args.Contains("--compress-db"))
         {
             var database = Path.Combine(appDirectory, "alliance_watch.db");
             if (!File.Exists(database)) throw new FileNotFoundException("The archive database was not found.", database);
             var storage = new Storage(database);
             storage.Initialize();
-            Console.WriteLine("Backing up archive before image consolidation…");
-            var backup = storage.BackupBeforeImageConsolidation();
-            Console.WriteLine("Backup: " + backup);
-            var result = storage.ConsolidateImages((done, total) =>
-            {
-                if (done == total || done % 500 == 0) Console.WriteLine($"Linked {done:N0}/{total:N0} legacy images…");
-            });
-            storage.VerifyImageStorage();
-            Console.WriteLine($"Verified {result.Links:N0} article links to {result.UniqueBlobs:N0} stored images. Compacting database…");
-            storage.CompactDatabase();
-            storage.VerifyImageStorage();
-            Console.WriteLine($"Complete. Avoided {result.ReclaimedBytes:N0} duplicate payload bytes.");
+            var result = storage.CompressDatabase(new ConsoleCompressionProgress());
+            Console.WriteLine($"Complete. Preserved {result.ImageLinks:N0} article-image links to {result.UniqueImages:N0} unique images.");
+            Console.WriteLine($"Database: {result.BeforeBytes:N0} → {result.AfterBytes:N0} bytes. Backup: {result.BackupPath}");
             return;
         }
 
         try
         {
-            var config = AppConfig.Load(Path.Combine(appDirectory, "config.json"));
+            var config = StartupConfiguration.Load(appDirectory);
             var smoke = args.Contains("--ui-smoke");
             var storage = new Storage(Path.Combine(appDirectory, smoke ? "assessment-ui-smoke.db" : "alliance_watch.db"));
             storage.Initialize();
@@ -67,6 +55,15 @@ internal static class Program
                 "AllianceWatch - Startup Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+    }
+
+    private sealed class ConsoleCompressionProgress : IProgress<DatabaseCompressionProgress>
+    {
+        public void Report(DatabaseCompressionProgress progress)
+        {
+            if (progress.Total == 0 || progress.Processed == 0 || progress.Processed == progress.Total || progress.Processed % 500 == 0)
+                Console.WriteLine(progress.Total > 0 ? $"{progress.Stage}: {progress.Processed:N0}/{progress.Total:N0}" : progress.Stage + "…");
         }
     }
 }

@@ -30,6 +30,11 @@ internal static class AssessmentTests
         Test("Atom alternate URL",()=>Assert(new XmlSourceAdapter().Parse("<feed xmlns='http://www.w3.org/2005/Atom'><entry><title>Test</title><link rel='self' href='https://example.org/self'/><link rel='alternate' href='https://example.org/story'/></entry></feed>",new()).Single().Url=="https://example.org/story"));
         Test("Malformed feed recovery",()=>Assert(new XmlSourceAdapter().Parse("<rss><channel><item><title>A & B</title></item></channel></rss>",new()).Single().Title=="A & B"));
         Test("Unsafe XML rejected",()=>{bool blocked=false;try{new XmlSourceAdapter().Parse("<!DOCTYPE rss [<!ENTITY x SYSTEM 'file:///secret'>]><rss>&x;</rss>",new());}catch(System.Xml.XmlException){blocked=true;}Assert(blocked);});
+        Test("Missing configuration recovers bundled defaults without changing the database", StartupConfigurationTests.VerifyMissingConfiguration);
+        Test("Startup preserves existing custom configuration", StartupConfigurationTests.VerifyExistingConfiguration);
+        Test("Startup reports invalid settings without resetting them", StartupConfigurationTests.VerifyInvalidConfiguration);
+        Test("Concurrent startup publishes one complete default configuration", StartupConfigurationTests.VerifyConcurrentStartup);
+        Test("Published launch uses its own archive and development runs preserve the source archive", StartupConfigurationTests.VerifyLaunchDirectory);
         Test("JSON field mappings",()=>Assert(new JsonSourceAdapter().Parse("{\"data\":[{\"headline\":\"Test\"}]}",new(){ItemsPath="data",FieldMap=new(){["title"]="headline"}}).Single().Title=="Test"));
         Test("CSV quotations",()=>Assert(new CsvSourceAdapter().Parse("title,summary\r\n\"A, B\",\"Line 1\nLine 2\"",new()).Single().Title=="A, B"));
         Test("Configured theater source coverage",()=>
@@ -47,6 +52,10 @@ internal static class AssessmentTests
         Test("Image deduplication runs continuously with archives disabled and resumes after restart", ImageDeduplicationTests.VerifyAlwaysActiveMigration);
         Test("Image migration and parallel archival preserve one payload and every article link", ImageDeduplicationTests.VerifyConcurrentMigrationAndArchival);
         Test("Gallery article links survive background image rehashing", GalleryBrowserTests.VerifyGalleryLinksDuringImageMigration);
+        Test("Manual compression rehashes every image, preserves article links, shrinks the database, and retains backups", DatabaseCompressionTests.VerifyFullCompression);
+        Test("Failed compression preserves corrupt payloads and its recovery backup", DatabaseCompressionTests.VerifyCorruptImageRecovery);
+        Test("Canceled compression leaves the database untouched", DatabaseCompressionTests.VerifyCanceledCompression);
+        Test("Compression button completes and resumes automatic image deduplication", DatabaseCompressionTests.VerifyButtonAndMonitoringResume);
         Test("Database browser paging and global search", GalleryBrowserTests.VerifyBrowserPagingAndSearch);
         Test("App closes after gallery use without waiting on stalled archives", GalleryBrowserTests.VerifyCloseAfterGallery);
         Test("All-field archive search includes old articles and compressed text", ArticleSearchTests.VerifyAllFieldsAndOldArticles);
