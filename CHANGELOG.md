@@ -4,9 +4,9 @@
 
 - Allowed free use, modification, and free sharing of AllianceWatch with attribution,
   including internal business use. Selling copies or derivatives, paid bundles,
-  and paid hosted access require Jesse Lee Shelley's paid written permission.
+  and paid hosted access require the owner's paid written permission.
   The free-use grant also covers earlier versions published by the owner.
-- Identified Jesse Lee Shelley as creator and copyright owner, with LinkedIn
+- Added creator and copyright-owner details, with LinkedIn
   and GitHub repository links in the app, source, and citation metadata.
 - Added a permanent attribution banner, source-file license notices, distributable
   license and attribution files, and GitHub citation metadata.
