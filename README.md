@@ -64,8 +64,10 @@ The interface starts in borderless full-screen mode. Use the header controls to 
 to the next monitor, minimize, restore to a resizable window, or close. Drag the
 `ALLIANCEWATCH` title area to move a restored window between screens. `F11` toggles
 full-screen, `Ctrl+Shift+Left/Right` moves between monitors, and `Esc` exits.
-At shorter window heights, scroll the right rail to reach every operator action;
-filter bars in the secondary windows wrap to keep their controls accessible.
+All nine operator actions stay visible in the right rail, including **COMPRESS
+DATABASE**. Telemetry above them scrolls independently. The minimum resizable
+window is 900 × 650; dashboard and secondary filter bars wrap to keep their
+controls and full button labels accessible. Buttons can also be reached with Tab.
 
 Use **RUN ACTIVE SCAN** to run a collection cycle (per-feed due times and backoff still
 apply), **ASSESSMENT CONSOLE** or click the gauge for the assessment views, and

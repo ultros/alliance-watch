@@ -40,6 +40,11 @@ internal sealed class HelpForm : Form
         Controls.Add(_grid);
         Controls.Add(_search);
         Controls.Add(notice);
+        notice.SizeChanged += (_, _) =>
+        {
+            var height = notice.GetPreferredSize(new Size(notice.Width, 0)).Height;
+            if (notice.Height != height) notice.Height = height;
+        };
         _search.TextChanged += (_, _) => ApplyFilter();
         UiToolTips.Enable(this);
         ApplyFilter();

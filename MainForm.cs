@@ -50,8 +50,8 @@ internal sealed class MainForm : Form
     private readonly Label _alertCount = new() { Dock = DockStyle.Fill, Font = UiTheme.Micro, ForeColor = UiTheme.Muted, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _coverageBadge = new() { Dock = DockStyle.Fill, Font = UiTheme.Micro, ForeColor = UiTheme.Cyan,
         TextAlign = ContentAlignment.MiddleLeft, Cursor = Cursors.Hand, Text = "COVERAGE // CHECKING" };
-    private readonly Button _scanButton = UiTheme.Button("[ RUN ACTIVE SCAN ]");
-    private readonly Button _compressButton = UiTheme.Button("[ COMPRESS DATABASE ]");
+    private readonly Button _scanButton = UiTheme.Button("RUN ACTIVE SCAN");
+    private readonly Button _compressButton = UiTheme.Button("COMPRESS DATABASE");
     private readonly Button _allFilter = UiTheme.Button("ALL SIGNALS");
     private readonly Button _criticalFilter = UiTheme.Button("CRITICAL");
     private readonly TextBox _archiveSearch = new() { Width = 260, MaxLength = 512, PlaceholderText = "Search all archived articles…", Tag = "archive-search" };
@@ -100,7 +100,7 @@ internal sealed class MainForm : Form
         StartPosition = FormStartPosition.Manual;
         KeyPreview = true;
         DoubleBuffered = true;
-        MinimumSize = new Size(900, 600);
+        MinimumSize = new Size(900, 650);
 
         BuildInterface();
         UiToolTips.Enable(this);
@@ -300,16 +300,19 @@ internal sealed class MainForm : Form
     {
         var card = new TelemetryPanel { Caption = "DETECTED ALIGNMENT SIGNALS", Dock = DockStyle.Fill };
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = UiTheme.Surface };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
+        var toolbar = new WrappingToolbar { Name = "dashboard-search-toolbar", MinimumToolbarHeight = 38, Padding = new Padding(0, 2, 0, 2) };
         _allFilter.Width = 115;
         _criticalFilter.Width = 105;
         _allFilter.Click += (_, _) => { _criticalOnly = false; UpdateFilterButtons(); PopulateGrid(); };
         _criticalFilter.Click += (_, _) => { _criticalOnly = true; UpdateFilterButtons(); PopulateGrid(); };
         toolbar.Controls.Add(_allFilter);
         toolbar.Controls.Add(_criticalFilter);
+        _archiveSearch.Width = 200;
+        _archiveSearch.PlaceholderText = "Search article archive…";
         var searchArchive = UiTheme.Button("SEARCH ARCHIVE");
         searchArchive.Width = 130;
         _archiveSearch.AccessibleName = "Search every saved article, including old articles";
@@ -336,12 +339,6 @@ internal sealed class MainForm : Form
         toolbar.Controls.Add(evidenceHint);
         toolbar.SizeChanged += (_, _) =>
         {
-            var compact = toolbar.ClientSize.Width < 650;
-            _allFilter.Width = compact ? 78 : 115;
-            _criticalFilter.Width = compact ? 78 : 105;
-            _archiveSearch.Width = compact ? 150 : 260;
-            searchArchive.Width = compact ? 58 : 130;
-            searchArchive.Text = compact ? "GO" : "SEARCH ARCHIVE";
             evidenceHint.Visible = toolbar.ClientSize.Width >= 950;
         };
         layout.Controls.Add(toolbar, 0, 0);
@@ -378,16 +375,18 @@ internal sealed class MainForm : Form
 
     private Control BuildRightRail()
     {
-        // The right rail is taller than a small desktop window. Scroll the rail
-        // instead of compressing its actions, feeds and alerts to unusable rows.
-        var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiTheme.Void };
-        var rail = new TableLayoutPanel { Dock = DockStyle.Top, RowCount = 5, BackColor = UiTheme.Void };
+        // Keep every operator action visible while telemetry scrolls independently.
+        var host = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = UiTheme.Void, Margin = Padding.Empty };
+        host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        host.RowStyles.Add(new RowStyle(SizeType.Absolute, 352));
+        var viewport = new Panel { Name = "right-telemetry-viewport", Dock = DockStyle.Fill, AutoScroll = true, BackColor = UiTheme.Void, Margin = Padding.Empty };
+        host.Controls.Add(viewport, 0, 0);
+        var rail = new TableLayoutPanel { Dock = DockStyle.Top, RowCount = 4, BackColor = UiTheme.Void };
         rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 142));
         rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
         rail.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         rail.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        rail.RowStyles.Add(new RowStyle(SizeType.Absolute, 396));
-        const int minimumRailHeight = 968; // 142 + 150 + 140 + 140 + 396
+        const int minimumRailHeight = 572; // 142 + 150 + 140 + 140
         viewport.Controls.Add(rail);
         viewport.SizeChanged += (_, _) => rail.Height = Math.Max(minimumRailHeight, viewport.ClientSize.Height);
         rail.Height = minimumRailHeight;
@@ -449,35 +448,35 @@ internal sealed class MainForm : Form
 
         var control = new TelemetryPanel { Caption = "OPERATOR CONTROL", Dock = DockStyle.Fill };
         var controlLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10 };
-        for (var index = 0; index < 9; index++) controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        for (var index = 0; index < 9; index++) controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         controlLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
         _scanButton.Dock = DockStyle.Fill;
         _scanButton.Click += async (_, _) => await RunScanAsync();
         controlLayout.Controls.Add(_scanButton, 0, 0);
-        var testAlert = UiTheme.Button("[ ASSESSMENT CONSOLE ]");
+        var testAlert = UiTheme.Button("ASSESSMENT CONSOLE");
         testAlert.Dock = DockStyle.Fill;
         testAlert.Click += (_, _) =>
         {
             OpenAssessment();
         };
         controlLayout.Controls.Add(testAlert, 0, 1);
-        var editConfig = UiTheme.Button("[ OPEN CONFIGURATION ]");
+        var editConfig = UiTheme.Button("OPEN CONFIGURATION");
         editConfig.Dock = DockStyle.Fill;
         editConfig.Click += (_, _) => OpenFile(Path.Combine(_appDirectory, "config.json"));
         controlLayout.Controls.Add(editConfig, 0, 2);
-        var help = UiTheme.Button("[ HELP / DEFINITIONS ]");
+        var help = UiTheme.Button("HELP / DEFINITIONS");
         help.Dock = DockStyle.Fill;
         help.Click += (_, _) => new HelpForm(_config.Assessment.Protocols).Show(this);
-        var database = UiTheme.Button("[ DATABASE BROWSER ]");
+        var database = UiTheme.Button("DATABASE BROWSER");
         database.Dock = DockStyle.Fill;
         database.Click += (_, _) => new DatabaseBrowserForm(_storage).Show(this);
-        var mapMode = UiTheme.Button("[ MAP / ALERT CATEGORIES ]");
+        var mapMode = UiTheme.Button("MAP / ALERT CATEGORIES");
         mapMode.Dock = DockStyle.Fill;
         mapMode.Click += (_, _) => new MapForm(_storage, _config).Show(this);
-        var operations = UiTheme.Button("[ OPERATIONS WORKSPACE ]");
+        var operations = UiTheme.Button("OPERATIONS WORKSPACE");
         operations.Dock = DockStyle.Fill;
         operations.Click += (_, _) => OpenOperations();
-        var ignoredNews = UiTheme.Button("[ IGNORED NEWS / RESTORE ]");
+        var ignoredNews = UiTheme.Button("IGNORED NEWS / RESTORE");
         ignoredNews.Dock = DockStyle.Fill;
         ignoredNews.Click += (_, _) => OpenIgnoredNews();
         controlLayout.Controls.Add(database, 0, 3);
@@ -491,15 +490,20 @@ internal sealed class MainForm : Form
         controlLayout.Controls.Add(_compressButton, 0, 8);
         controlLayout.Controls.Add(new Label
         {
-            Text = "ESC EXIT // F11 SIZE // CTRL+SHIFT+→ SCREEN",
+            Text = "F11 SIZE // CTRL+SHIFT+→ SCREEN",
             Dock = DockStyle.Fill,
             ForeColor = UiTheme.Muted,
             Font = UiTheme.Micro,
             TextAlign = ContentAlignment.BottomCenter
         }, 0, 9);
+        foreach (var action in controlLayout.Controls.OfType<Button>())
+        {
+            action.Font = UiTheme.Small;
+            action.Margin = new Padding(3, 1, 3, 1);
+        }
         control.Controls.Add(controlLayout);
-        rail.Controls.Add(control, 0, 4);
-        return viewport;
+        host.Controls.Add(control, 0, 1);
+        return host;
     }
 
     private Control BuildAttribution()

@@ -21,6 +21,12 @@ internal static class AssessmentTests
         var settings=new AssessmentSettings();var engine=new AssessmentEngine(settings);var now=new DateTimeOffset(2026,9,19,12,0,0,TimeSpan.Zero);
         EvidenceEvent Event(string id,string title,string origin="wire",DateTimeOffset? published=null,DateTimeOffset? seen=null,string summary="")=>engine.Extract(new(id,title,summary,"https://example.org/"+id,"test",published??now,seen??now,.8,origin));
         Test("30 stable protocols",()=>Assert(settings.Protocols.Select(p=>p.Id).SequenceEqual(Enumerable.Range(1,30))));
+        Test("Long action labels remain readable and keyboard accessible",()=>
+        {
+            using var button = UiTheme.Button("OPEN BACKUP FOLDER");
+            UiLayoutTests.VerifyButtonText(button);
+            Assert(button.TabStop, "Actions must be accessible with the keyboard");
+        });
         string[] fixtures=["mutual defense","integrated command","joint operational planning","wartime logistics","reciprocal base access","strategic coordination","reserve mobilization","force dispersal","strategic force posture","airspace closure","maritime exclusion zone","embassy evacuation","civil defense activation","martial law","mass logistics movement","field hospitals deployed","munitions surge","command relocation","national cyber alert","critical infrastructure disruption","satellite disruption","diplomatic breakdown","ultimatum","nuclear posture","border closure","capital controls","war risk premium","war economy","interstate attack","multi-theater synchronization"];
         foreach(var p in settings.Protocols)
         {

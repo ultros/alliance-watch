@@ -167,7 +167,7 @@ internal sealed class AssessmentForm : Form
         var page=Page("WHY SCORE MOVED"); page.Controls.Add(g);
         g.CellDoubleClick += (_,e) => { if(e.RowIndex >= 0) { var id=Convert.ToString(g.Rows[e.RowIndex].Cells["EventId"].Value); if(id is not ("convergence" or "normalization") && id != null) ShowCluster(id); } };
         var label = new Label { Dock = DockStyle.Top, Height = 62, Text = "LOADING SCORE COMPARISON…", ForeColor = UiTheme.Cyan }; _changesSummary=label; page.Controls.Add(label);
-        var bar=new FlowLayoutPanel { Dock=DockStyle.Top, Height=40, WrapContents=false };
+        var bar=new WrappingToolbar { MinimumToolbarHeight=40 };
         var range=new ComboBox { Width=200, DropDownStyle=ComboBoxStyle.DropDownList }; _changeRange=range;
         range.Items.AddRange(["LAST GAUGE MOVE","PREVIOUS SNAPSHOT","1 HOUR","6 HOURS","24 HOURS","7 DAYS"]);
         range.SelectedItem=range.Items.Cast<string>().FirstOrDefault(x=>x==selectedRange)??"LAST GAUGE MOVE";
@@ -380,7 +380,7 @@ internal sealed class AssessmentForm : Form
     private void BuildGraph()
     {
         var page=Page("ACTOR GRAPH"); var grid=Grid(); page.Controls.Add(grid);
-        var bar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=36}; var scenario=new ComboBox{Width=180,DropDownStyle=ComboBoxStyle.DropDownList}; scenario.Items.Add("ALL SCENARIOS");scenario.Items.AddRange(_config.Assessment.Scenarios.Select(s=>(object)s.Id).ToArray());scenario.SelectedIndex=0;
+        var bar=new WrappingToolbar{MinimumToolbarHeight=36}; var scenario=new ComboBox{Width=180,DropDownStyle=ComboBoxStyle.DropDownList}; scenario.Items.Add("ALL SCENARIOS");scenario.Items.AddRange(_config.Assessment.Scenarios.Select(s=>(object)s.Id).ToArray());scenario.SelectedIndex=0;
         var kind=new ComboBox{Width=180,DropDownStyle=ComboBoxStyle.DropDownList};kind.Items.AddRange(["ALL RELATIONSHIPS","treaty","command","logistics","basing","conflict","statement"]);kind.SelectedIndex=0;
         var geography=new TextBox{Width=160,PlaceholderText="Geography"}; var days=new NumericUpDown{Width=65,Minimum=1,Maximum=3650,Value=30};bar.Controls.AddRange([scenario,kind,geography,new Label{Text="Days",AutoSize=true},days]);page.Controls.Add(bar);
         var graph=new ActorGraphControl{Dock=DockStyle.Top,Height=240};page.Controls.Add(graph);bar.BringToFront();
@@ -439,14 +439,14 @@ internal sealed class AssessmentForm : Form
     {
         var page=Page("RULE ALERTS");var grid=Grid();page.Controls.Add(grid);
         void Refresh(){alerts=_storage.AssessmentAlerts();grid.DataSource=alerts.Select(a=>new{a.Id,a.Rule,a.Timestamp,a.Confidence,a.State,a.SnoozedUntil,Events=string.Join(",",a.EventIds)}).ToArray();}
-        var bar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=38};page.Controls.Add(bar);
+        var bar=new WrappingToolbar{MinimumToolbarHeight=38};page.Controls.Add(bar);
         foreach(var action in new[]{"ACKNOWLEDGED","MUTED","SNOOZED"}){var b=UiTheme.Button(action);bar.Controls.Add(b);b.Click+=(_,_)=>{if(grid.CurrentRow==null)return;var id=Convert.ToInt64(grid.CurrentRow.Cells["Id"].Value);_storage.SetAlertState(id,action,action=="SNOOZED"?DateTimeOffset.UtcNow.AddHours(1):null);Refresh();};}
         grid.CellDoubleClick+=(_,e)=>{if(e.RowIndex>=0){var a=alerts[e.RowIndex];foreach(var id in a.EventIds.Take(1))ShowCluster(id);}};Refresh();
     }
     private void BuildProtocols() => AddGrid("PROTOCOLS",_config.Assessment.Protocols.Select(p=>new{p.Id,p.Name,p.Severity,p.HalfLifeHours,p.RequiredIndependentSources,p.Version,p.Description,Patterns=string.Join(" | ",p.Patterns),Exclusions=string.Join(" | ",p.Exclusions),p.SourceRequirements}).ToArray());
     private void BuildExports()
     {
-        var page=Page("EXPORT");var bar=new FlowLayoutPanel{Dock=DockStyle.Top,Height=50};page.Controls.Add(bar);
+        var page=Page("EXPORT");var bar=new WrappingToolbar{MinimumToolbarHeight=50};page.Controls.Add(bar);
         foreach(var type in new[]{"JSON","CSV","TXT"})
         {
             var b=UiTheme.Button("EXPORT "+type);bar.Controls.Add(b);b.Click+=(_,_)=>

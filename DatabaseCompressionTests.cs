@@ -99,6 +99,7 @@ internal static class DatabaseCompressionTests
         while (!button.Enabled && DateTime.UtcNow < readyDeadline) { Application.DoEvents(); Thread.Sleep(5); }
         Require(button.Enabled, "Compression must become available after the startup scan.");
         DatabaseCompressionResult? completed = null;
+        Exception? layoutFailure = null;
         bool timedOut = false;
         var deadline = DateTime.UtcNow.AddSeconds(20);
         using var closeCompleted = new System.Windows.Forms.Timer { Interval = 25 };
@@ -106,12 +107,18 @@ internal static class DatabaseCompressionTests
         {
             var dialog = Application.OpenForms.OfType<DatabaseCompressionForm>().FirstOrDefault();
             if (dialog is null) return;
-            if (dialog.ControlBox) { completed = dialog.Result; dialog.Close(); }
+            if (dialog.ControlBox)
+            {
+                completed = dialog.Result;
+                try { UiLayoutTests.Verify(dialog); } catch (Exception ex) { layoutFailure = ex; }
+                dialog.Close();
+            }
             else if (DateTime.UtcNow > deadline) { timedOut = true; dialog.Dispose(); }
         };
         closeCompleted.Start();
         button.PerformClick();
         closeCompleted.Stop();
+        if (layoutFailure is not null) throw layoutFailure;
         Require(!timedOut && completed is not null && button.Enabled, "The real compression button must complete and become usable again.");
         var resumed = (FeedMonitor)typeof(MainForm).GetField("_monitor", flags)!.GetValue(main)!;
         Require(!ReferenceEquals(oldMonitor, resumed), "The button must restart collection after releasing the paused worker lifetime.");

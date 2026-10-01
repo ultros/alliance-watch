@@ -51,15 +51,19 @@ internal static class UiTheme
             ForeColor = Cyan,
             Font = Label,
             Cursor = Cursors.Hand,
-            TabStop = false,
+            TabStop = true,
             Margin = new Padding(3)
         };
         button.FlatAppearance.BorderColor = Grid;
         button.FlatAppearance.BorderSize = 1;
         button.FlatAppearance.MouseOverBackColor = Raised;
         button.FlatAppearance.MouseDownBackColor = Color.FromArgb(9, 43, 47);
+        button.Width = Math.Max(75, ButtonTextWidth(button));
         return button;
     }
+
+    internal static int ButtonTextWidth(Button button) => TextRenderer.MeasureText(button.Text, button.Font,
+        Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width + button.Padding.Horizontal + 24;
 
     public static void KeepSplitReadable(SplitContainer split, double firstFraction, int firstMinimum, int secondMinimum)
     {
@@ -114,6 +118,11 @@ internal sealed class WrappingToolbar : FlowLayoutPanel
 
     protected override void OnLayout(LayoutEventArgs eventArgs)
     {
+        foreach (var button in Controls.OfType<Button>().Where(button => button.Dock == DockStyle.None))
+        {
+            var width = Math.Max(button.Width, UiTheme.ButtonTextWidth(button));
+            if (button.Width != width) button.Width = width;
+        }
         base.OnLayout(eventArgs);
         if (ClientSize.Width <= 0) return;
         // Control.Visible is false for every child while an owning form or tab

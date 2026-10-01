@@ -11,7 +11,7 @@ namespace AllianceWatch;
 
 internal sealed class DatabaseCompressionForm : Form
 {
-    private readonly Label _status = new() { Dock = DockStyle.Fill, ForeColor = UiTheme.Cyan, Text = "Pausing collection…", TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _status = new() { AutoSize = true, Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 8), ForeColor = UiTheme.Cyan, Text = "Pausing collection…", TextAlign = ContentAlignment.MiddleLeft };
     private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, Maximum = 1000 };
     private readonly TextBox _details = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None,
         BackColor = UiTheme.Surface, ForeColor = UiTheme.Text, ScrollBars = ScrollBars.Vertical, TabStop = false };
@@ -31,16 +31,24 @@ internal sealed class DatabaseCompressionForm : Form
         Font = UiTheme.Small;
         ControlBox = false;
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 1, RowCount = 5 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "Creates a verified backup, shares identical image content, and reclaims unused space. Large archives can take several minutes. Collection resumes when this window closes." }, 0, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var introduction = new Label { Name = "compression-introduction", AutoSize = true, Dock = DockStyle.Fill, Padding = new Padding(0, 0, 0, 8), Text = "Creates a verified backup, shares identical image content, and reclaims unused space. Large archives can take several minutes. Collection resumes when this window closes." };
+        layout.Controls.Add(introduction, 0, 0);
+        layout.SizeChanged += (_, _) =>
+        {
+            var width = Math.Max(1, layout.ClientSize.Width - layout.Padding.Horizontal - 6);
+            introduction.MaximumSize = new Size(width, 0);
+            _status.MaximumSize = new Size(width, 0);
+        };
         layout.Controls.Add(_status, 0, 1);
         layout.Controls.Add(_progress, 0, 2);
         layout.Controls.Add(_details, 0, 3);
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+        var actions = new WrappingToolbar { MinimumToolbarHeight = 42, FlowDirection = FlowDirection.RightToLeft };
         _close.Enabled = false;
         _close.Click += (_, _) => Close();
         _backup.Visible = false;

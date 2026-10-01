@@ -2,6 +2,11 @@
 
 ## 2026-10-01
 
+- Kept all nine operator actions visible in resizable windows, with independently
+  scrolling telemetry. Wrapped dashboard search and assessment toolbars, sized
+  buttons for their complete labels, and enabled keyboard navigation.
+- Made compression instructions, status, backup-folder access, and results fit
+  the dialog; checked every assessment and operations tab at minimum window sizes.
 - Added a manual Compress Database action with progress, verified backup, full
   image-content rehashing and relinking, orphan-payload cleanup, and compaction.
   Collection pauses and resumes around maintenance; article-image metadata is retained.
