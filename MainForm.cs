@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+// Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+// Third-party use requires a separately agreed paid written license.
+// See LICENSE and NOTICE for terms and required attribution.
+// Creator: https://linkedin.com/in/jesse-shelley
+// Repository: https://github.com/ultros/alliance-watch
+
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -116,17 +123,19 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             BackColor = UiTheme.Void,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(8)
         };
         shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
         shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(shell);
 
         shell.Controls.Add(BuildHeader(), 0, 0);
         shell.Controls.Add(BuildContent(), 0, 1);
-        shell.Controls.Add(BuildFooter(), 0, 2);
+        shell.Controls.Add(BuildAttribution(), 0, 2);
+        shell.Controls.Add(BuildFooter(), 0, 3);
         var windowControls = BuildWindowControls();
         Controls.Add(windowControls);
         windowControls.BringToFront();
@@ -485,6 +494,55 @@ internal sealed class MainForm : Form
         control.Controls.Add(controlLayout);
         rail.Controls.Add(control, 0, 4);
         return viewport;
+    }
+
+    private Control BuildAttribution()
+    {
+        var area = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 0, 4, 0),
+            BackColor = UiTheme.Surface,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        area.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        area.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        var credit = new Label
+        {
+            Name = "developer-attribution",
+            Text = "Copyright (c) 2026 Jesse Lee Shelley | AllianceWatch by Jesse Lee Shelley",
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            BackColor = UiTheme.Surface,
+            ForeColor = UiTheme.Cyan,
+            Font = UiTheme.Micro,
+            TextAlign = ContentAlignment.MiddleCenter,
+            AccessibleName = "AllianceWatch by Jesse Lee Shelley; copyright owner"
+        };
+        var links = new LinkLabel
+        {
+            Name = "developer-links",
+            Text = "LinkedIn: https://linkedin.com/in/jesse-shelley | GitHub: https://github.com/ultros/alliance-watch",
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            BackColor = UiTheme.Surface,
+            ForeColor = UiTheme.Cyan,
+            LinkColor = UiTheme.CyanHot,
+            ActiveLinkColor = UiTheme.Text,
+            VisitedLinkColor = UiTheme.CyanHot,
+            Font = UiTheme.Micro,
+            TextAlign = ContentAlignment.MiddleCenter,
+            AccessibleName = "Jesse Lee Shelley LinkedIn profile and AllianceWatch GitHub repository",
+            TabStop = true
+        };
+        links.Links.Clear();
+        foreach (var url in new[] { "https://linkedin.com/in/jesse-shelley", "https://github.com/ultros/alliance-watch" })
+            links.Links.Add(links.Text.IndexOf(url, StringComparison.Ordinal), url.Length, url);
+        links.LinkClicked += (_, args) => OpenFile(args.Link?.LinkData as string ?? "");
+        area.Controls.Add(credit, 0, 0);
+        area.Controls.Add(links, 0, 1);
+        return area;
     }
 
     private Control BuildFooter()

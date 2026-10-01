@@ -1,0 +1,100 @@
+AllianceWatch Proprietary Paid-Use Terms
+Version 1.0 - October 1, 2026
+SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+
+Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+
+Copyright owner and licensor: Jesse Lee Shelley ("Owner")
+LinkedIn: https://linkedin.com/in/jesse-shelley
+Project repository: https://github.com/ultros/alliance-watch
+
+1. Scope
+
+These terms apply to the original AllianceWatch source code, scripts,
+configuration, documentation, original project assets, and executable software
+to the extent that their rights are held by Owner (the "Software"). Third-party
+components and collected publisher content are excluded; see section 6.
+
+2. No general permission or free-use license
+
+All rights in the Software are reserved. This document does not grant any
+third party a free, evaluation, personal, educational, research, nonprofit,
+commercial, or other operational-use license.
+
+Except for rights that cannot legally be restricted or the limited repository
+access described in section 5, a third party must not run, use, reproduce beyond
+permitted repository access, modify, create derivative works from, distribute,
+sublicense, sell, host, or provide the Software or its functionality to others
+without the paid written permission described in section 3.
+
+Public availability of source code or downloadable binaries does not grant
+permission to run or otherwise use the Software. Credit to Owner does not
+substitute for a paid license.
+
+3. A separate paid written license is required
+
+Before third-party operational use or any other reserved activity, the third
+party must obtain a separate written license agreement authorized by Owner and
+pay the fees required by that agreement. The agreement must identify the
+licensee and specify the permitted activities and applicable scope, conditions,
+and duration. Only the rights expressly granted in that agreement are allowed.
+
+No price, payment endpoint, automatic purchase right, or standard usage grant
+is established by this document. Sending money or requesting permission alone
+does not create a license. Contact Owner to agree on licensing terms:
+https://linkedin.com/in/jesse-shelley
+
+4. Required attribution for authorized use
+
+Unless Owner expressly agrees otherwise in the separate written agreement,
+authorized copies, distributions, derivative applications, and hosted interfaces
+must retain copyright and license notices and prominently credit:
+
+    AllianceWatch by Jesse Lee Shelley
+    Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+    LinkedIn: https://linkedin.com/in/jesse-shelley
+    Project: https://github.com/ultros/alliance-watch
+
+Authorized graphical applications must display this credit and both links in a
+readable attribution area. Licensees must credit Jesse Lee Shelley and identify
+AllianceWatch with its repository link in public reports, publications, or
+presentations describing their authorized use. This is a condition of the paid
+permission; it does not assert copyright over facts or independently authored
+outputs, or impose obligations on people who have not accepted a license.
+
+Attribution must not falsely imply Owner's endorsement of a licensee, product,
+organization, modification, or analytical conclusion. No trademark rights are
+granted by these terms.
+
+5. GitHub access and existing rights
+
+While the repository is public on GitHub, the limited rights to view and fork
+its contents that are provided by the applicable GitHub Terms of Service are
+unaffected. Those repository-access rights are not an operational-use license
+from Owner. The same applies to rights required by applicable law. Nothing here
+purports to revoke rights already validly granted under a prior license.
+
+6. Third-party materials
+
+Separately licensed libraries, runtimes, public-domain map data, and other
+third-party materials retain their own terms. These restrictions do not replace
+those terms or restrict rights granted by their respective rights holders.
+Downloaded articles, images, and other publisher content retain their original
+rights. See THIRD-PARTY-NOTICES.md and the bundled third-party license texts.
+
+7. Warranty and liability
+
+Unless a separate written agreement expressly provides otherwise, the Software
+is provided "AS IS", without warranties of any kind, express or implied,
+including merchantability, fitness for a particular purpose, and noninfringement.
+To the maximum extent permitted by applicable law, Owner is not liable for any
+claim, loss, or damage arising from the Software or its use, including loss of
+data, interruption, or indirect, incidental, special, or consequential damages.
+Nothing in these terms excludes liability that applicable law does not permit
+to be excluded.
+
+8. Rights reserved
+
+Any permission beyond the limited access in section 5 must come from Owner's
+separate paid written agreement. No open-source license is granted for the
+Software by this document.

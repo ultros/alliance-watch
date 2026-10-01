@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+// Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+// Third-party use requires a separately agreed paid written license.
+// See LICENSE and NOTICE for terms and required attribution.
+// Creator: https://linkedin.com/in/jesse-shelley
+// Repository: https://github.com/ultros/alliance-watch
+
 using System.IO.Compression;
 using System.Text;
 using Microsoft.Data.Sqlite;

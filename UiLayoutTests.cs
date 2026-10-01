@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+// Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+// Third-party use requires a separately agreed paid written license.
+// See LICENSE and NOTICE for terms and required attribution.
+// Creator: https://linkedin.com/in/jesse-shelley
+// Repository: https://github.com/ultros/alliance-watch
+
 namespace AllianceWatch;
 
 internal static class UiLayoutTests
@@ -51,6 +58,13 @@ internal static class UiLayoutTests
         Require(viewport?.AutoScroll == true, "The right rail must scroll on short screens");
         var title = Descendants(main).OfType<Label>().Single(label => label.Text == "ALLIANCEWATCH");
         Require(title.Width >= 180, $"Dashboard title must remain readable at compact widths ({title.Width}px in {main.ClientSize.Width}px window)");
+        foreach (var name in new[] { "developer-attribution", "developer-links" })
+        {
+            var credit = Descendants(main).OfType<Label>().Single(label => label.Name == name);
+            var creditSize = TextRenderer.MeasureText(credit.Text, credit.Font);
+            Require(credit.Width >= creditSize.Width && credit.Height >= creditSize.Height,
+                $"Developer attribution and links must remain fully readable at {main.ClientSize.Width}px");
+        }
     }
 
     private static void VerifyBars(Control root, Size size)

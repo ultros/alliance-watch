@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+SPDX-License-Identifier: LicenseRef-AllianceWatch-Proprietary
+Copyright (c) 2026 Jesse Lee Shelley. All Rights Reserved.
+Third-party use requires a separately agreed paid written license.
+See LICENSE and NOTICE for terms and required attribution.
+Creator: https://linkedin.com/in/jesse-shelley
+Repository: https://github.com/ultros/alliance-watch
+-->
+
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="AllianceWatch.app" />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
